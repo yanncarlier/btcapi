@@ -19,28 +19,6 @@ def read_root():
 # def update_item(item_id: int, item: Item):
 #     return {"item_name": item.name, "item_id": item_id}
 ####################################################
-#### https://pypi.org/project/bitcoin/
-# to fix 
-# ####################################################
-# @app.get("/generate_btc_keypair")
-# async def generate_btc_keypair():
-#     import bitcoin
-#     # Generate a random private key
-#     private_key = bitcoin.random_key()
-#     # Convert the private key to WIF format (Wallet Import Format)
-#     wif_private_key = bitcoin.encode_privkey(private_key, 'wif')
-#     # Get the public key from the private key
-#     public_key = privtopub(private_key)
-#     # Convert the public key to a Bitcoin address
-#     btc_address = pubtoaddr(public_key)
-#     return {
-#         "private_key": wif_private_key,
-#         "btc_address": btc_address
-#     }
-####################################################
-# passphrase not working need fix
-# passphrase not working need fix
-# passphrase not working need fix
 @app.get("/mnemonic/")
 def function_name():
     from mnemonic import Mnemonic
