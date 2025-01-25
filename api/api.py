@@ -6,8 +6,6 @@ from typing import Optional
 # from pydantic import BaseModel
 app = FastAPI()
 ############################
-class MnemonicRequest(BaseModel):
-    numWords: Optional[int] = 24
 class MnemonicResponse(BaseModel):
     BIP39Mnemonic: str
     BIP39Seed: str
