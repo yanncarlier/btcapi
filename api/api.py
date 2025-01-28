@@ -28,6 +28,7 @@ class AddressDetails(BaseModel):
     private_key: str
     public_key: str
     derivation_path: str
+    hardened: bool  # New field to indicate hardening
 class AddressListResponse(BaseModel):
     addresses: list[AddressDetails]
 class BrainWalletRequest(BaseModel):
@@ -36,7 +37,7 @@ class BrainWalletResponse(BaseModel):
     wif_private_key: str
     bitcoin_address: str
     public_key: str
-# Helper function for brain wallet
+# Helper function for brain wallet (unchanged)
 def generate_brain_wallet(passphrase):
     private_key = hashlib.sha256(passphrase.encode('utf-8')).digest()
     wif_private_key = b'\x80' + private_key
@@ -75,27 +76,38 @@ async def generate_bip84_addresses(request: AddressRequest = Body(...)):
 @app.post("/generate-bip86-addresses", response_model=AddressListResponse)
 async def generate_bip86_addresses(request: AddressRequest = Body(...)):
     return await _generate_bip_addresses(request, Bip86, Bip86Coins.BITCOIN, 86)
-# New BIP141 endpoint (P2WPKH nested in P2SH)
 @app.post("/generate-bip141-addresses", response_model=AddressListResponse)
 async def generate_bip141_addresses(request: AddressRequest = Body(...)):
-    return await _generate_bip_addresses(request, Bip49, Bip49Coins.BITCOIN, 49)  # Uses BIP49 logic
+    return await _generate_bip_addresses(request, Bip49, Bip49Coins.BITCOIN, 49)
 async def _generate_bip_addresses(request: AddressRequest, bip_class, coin_type, purpose: int):
     try:
         seed_bytes = Bip39SeedGenerator(request.mnemonic).Generate()
         bip_ctx = bip_class.FromSeed(seed_bytes, coin_type).Purpose().Coin().Account(0)
-        change_ctx = bip_ctx.Change(Bip44Changes.CHAIN_EXT)
+        # Standard change (external chain, non-hardened)
+        change_ctx_std = bip_ctx.Change(Bip44Changes.CHAIN_EXT)
+        # Hardened change (external chain, hardened)
+        change_ctx_hard = bip_ctx.Change(Bip44Changes.CHAIN_EXT + 0x80000000)
         addresses = []
         for i in range(request.num_addresses):
-            addr_ctx = change_ctx.AddressIndex(i)
-            # Convert DataBytes to bytes explicitly
-            public_key_bytes = addr_ctx.PublicKey().RawCompressed().ToBytes()
-            # Manually construct derivation path
-            derivation_path = f"m/{purpose}'/0'/0'/0/{i}"
+            # Standard addresses
+            addr_ctx_std = change_ctx_std.AddressIndex(i)
+            public_key_std = addr_ctx_std.PublicKey().RawCompressed().ToBytes()
             addresses.append({
-                "address": str(addr_ctx.PublicKey().ToAddress()),
-                "private_key": addr_ctx.PrivateKey().ToWif(),
-                "public_key": public_key_bytes.hex(),
-                "derivation_path": derivation_path
+                "address": str(addr_ctx_std.PublicKey().ToAddress()),
+                "private_key": addr_ctx_std.PrivateKey().ToWif(),
+                "public_key": public_key_std.hex(),
+                "derivation_path": f"m/{purpose}'/0'/0'/0/{i}",
+                "hardened": False
+            })
+            # Hardened addresses (change and index hardened)
+            addr_ctx_hard = change_ctx_hard.AddressIndex(i + 0x80000000)
+            public_key_hard = addr_ctx_hard.PublicKey().RawCompressed().ToBytes()
+            addresses.append({
+                "address": str(addr_ctx_hard.PublicKey().ToAddress()),
+                "private_key": addr_ctx_hard.PrivateKey().ToWif(),
+                "public_key": public_key_hard.hex(),
+                "derivation_path": f"m/{purpose}'/0'/0'/0'/{i}'",
+                "hardened": True
             })
         return {"addresses": addresses}
     except Exception as e:
