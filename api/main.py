@@ -13,6 +13,10 @@ app = FastAPI(
     version="1.0.0",
     description="An API to generate mnemonic seeds and various types of Bitcoin addresses.",
 )
+# removed because cors
+    # servers=[
+    #     {"url": "http://127.0.0.1:8000", "description": "Development server"}
+    # ]
 # Pydantic Models (unchanged)
 class MnemonicResponse(BaseModel):
     BIP39Mnemonic: str
