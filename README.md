@@ -10,8 +10,27 @@ pip install -r requirements.txt
 fastapi dev api.py
 ```
 
-### to test
 
+
+1. **Endpoints**:
+   - `/generate-bip49-addresses`: Generates BIP49 (wrapped SegWit) addresses.
+   - `/generate-bip84-addresses`: Generates BIP84 (native SegWit) addresses.
+   - `/generate-bip86-addresses`: Generates BIP86 (Taproot) addresses.
+   - `/generate-brain-wallet`: Generates a WIF and Bitcoin address from a passphrase.
+
+
+
+**Usage**:
+
+- Use POST requests with a valid BIP39 mnemonic for BIP endpoints.
+- Use a POST request with a passphrase for the brain wallet endpoint.
+
+**Example Requests**:
 ```
-curl -X POST -H "Content-Type: application/json" -d '{"mnemonic":"dutch relax ten exercise brick country afraid behave during polar segment baby"}' http://localhost:8000/generate-addresses |jq
+# BIP49
+curl -X POST "http://127.0.0.1:8000/generate-bip49-addresses" -H "Content-Type: application/json" -d '{"mnemonic":"your mnemonic here", "num_addresses":5}'
+```
+```
+# Brain Wallet
+curl -X POST "http://127.0.0.1:8000/generate-brain-wallet" -H "Content-Type: application/json" -d '{"passphrase":"your secret passphrase"}'
 ```

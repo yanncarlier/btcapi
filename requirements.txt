@@ -1,6 +1,7 @@
 annotated-types==0.7.0
 anyio==4.8.0
 asn1crypto==1.5.1
+base58==2.1.1
 bip-utils==2.9.3
 cbor2==5.6.5
 certifi==2024.12.14
@@ -23,6 +24,7 @@ Jinja2==3.1.5
 markdown-it-py==3.0.0
 MarkupSafe==3.0.2
 mdurl==0.1.2
+mnemonic==0.21
 py-sr25519-bindings==0.2.1
 pycparser==2.22
 pycryptodome==3.21.0
