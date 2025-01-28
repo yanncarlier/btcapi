@@ -12,11 +12,11 @@ app = FastAPI(
     title="Bitcoin Address Generation API",
     version="1.0.0",
     description="An API to generate mnemonic seeds and various types of Bitcoin addresses.",
+    servers=[
+        {"url": "http://127.0.0.1:8000", "description": "Development server"},
+        {"url": "https://btc-tx-gw-yanncarliers-projects.vercel.app/", "description": "Production environment"},
+    ]
 )
-# removed because cors
-    # servers=[
-    #     {"url": "http://127.0.0.1:8000", "description": "Development server"}
-    # ]
 # Pydantic Models (unchanged)
 class MnemonicResponse(BaseModel):
     BIP39Mnemonic: str
