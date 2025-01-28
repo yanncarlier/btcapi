@@ -75,6 +75,10 @@ async def generate_bip84_addresses(request: AddressRequest = Body(...)):
 @app.post("/generate-bip86-addresses", response_model=AddressListResponse)
 async def generate_bip86_addresses(request: AddressRequest = Body(...)):
     return await _generate_bip_addresses(request, Bip86, Bip86Coins.BITCOIN, 86)
+# New BIP141 endpoint (P2WPKH nested in P2SH)
+@app.post("/generate-bip141-addresses", response_model=AddressListResponse)
+async def generate_bip141_addresses(request: AddressRequest = Body(...)):
+    return await _generate_bip_addresses(request, Bip49, Bip49Coins.BITCOIN, 49)  # Uses BIP49 logic
 async def _generate_bip_addresses(request: AddressRequest, bip_class, coin_type, purpose: int):
     try:
         seed_bytes = Bip39SeedGenerator(request.mnemonic).Generate()
