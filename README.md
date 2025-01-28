@@ -16,6 +16,8 @@ fastapi dev api.py
    - `/generate-bip49-addresses`: Generates BIP49 (wrapped SegWit) addresses.
    - `/generate-bip84-addresses`: Generates BIP84 (native SegWit) addresses.
    - `/generate-bip86-addresses`: Generates BIP86 (Taproot) addresses.
+   - `/generate-bip141-addresses` uses BIP49 internally but explicitly labels it as BIP141 for clarity.
+   - Generates **P2SH-P2WPKH addresses** (wrapped SegWit starting with `3...`). Still uses `m/49'/0'/0'/0/i`
    - `/generate-brain-wallet`: Generates a WIF and Bitcoin address from a passphrase.
 
 
