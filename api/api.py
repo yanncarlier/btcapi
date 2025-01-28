@@ -63,7 +63,7 @@ async def generate_mnemonic():
     words = mnemo.generate(128)
     seed = mnemo.to_seed(words)
     return {"BIP39Mnemonic": words, "BIP39Seed": seed.hex()}
-@app.post("/generate-addresses", response_model=AddressListResponse)
+@app.post("/generate-bip44-addresses", response_model=AddressListResponse)
 async def generate_addresses(request: AddressRequest = Body(...)):
     return await _generate_bip_addresses(request, Bip44, Bip44Coins.BITCOIN, 44)
 @app.post("/generate-bip49-addresses", response_model=AddressListResponse)
