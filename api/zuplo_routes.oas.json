@@ -1,0 +1,191 @@
+openapi: 3.0.0
+info:
+  title: Bitcoin Address Generation API
+  version: 1.0.0
+  description: An API to generate mnemonic seeds and various types of Bitcoin addresses.
+servers:
+  - url: http://127.0.0.1:8000
+    description: Development server
+  - url: https://btc-tx-gw-yanncarliers-projects.vercel.app/
+    description: Production environment
+paths:
+  /:
+    get:
+      summary: Root endpoint
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  Hello:
+                    type: string
+  /generate-mnemonic:
+    get:
+      summary: Generate a BIP39 mnemonic and seed
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MnemonicResponse"
+  /generate-bip44-addresses:
+    post:
+      summary: Generate BIP44 addresses
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddressRequest"
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AddressListResponse"
+        "400":
+          description: Bad request
+  /generate-bip49-addresses:
+    post:
+      summary: Generate BIP49 addresses
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddressRequest"
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AddressListResponse"
+        "400":
+          description: Bad request
+  /generate-bip84-addresses:
+    post:
+      summary: Generate BIP84 addresses
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddressRequest"
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AddressListResponse"
+        "400":
+          description: Bad request
+  /generate-bip86-addresses:
+    post:
+      summary: Generate BIP86 addresses
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddressRequest"
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AddressListResponse"
+        "400":
+          description: Bad request
+  /generate-bip141-addresses:
+    post:
+      summary: Generate BIP141 addresses (P2WPKH nested in P2SH)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddressRequest"
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AddressListResponse"
+        "400":
+          description: Bad request
+  /generate-brain-wallet:
+    post:
+      summary: Generate a brain wallet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BrainWalletRequest"
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrainWalletResponse"
+        "400":
+          description: Bad request
+components:
+  schemas:
+    MnemonicResponse:
+      type: object
+      properties:
+        BIP39Mnemonic:
+          type: string
+        BIP39Seed:
+          type: string
+    AddressRequest:
+      type: object
+      properties:
+        mnemonic:
+          type: string
+        num_addresses:
+          type: integer
+          default: 5
+    AddressDetails:
+      type: object
+      properties:
+        address:
+          type: string
+        private_key:
+          type: string
+        public_key:
+          type: string
+        derivation_path:
+          type: string
+    AddressListResponse:
+      type: object
+      properties:
+        addresses:
+          type: array
+          items:
+            $ref: "#/components/schemas/AddressDetails"
+    BrainWalletRequest:
+      type: object
+      properties:
+        passphrase:
+          type: string
+    BrainWalletResponse:
+      type: object
+      properties:
+        wif_private_key:
+          type: string
+        bitcoin_address:
+          type: string
+        public_key:
+          type: string
