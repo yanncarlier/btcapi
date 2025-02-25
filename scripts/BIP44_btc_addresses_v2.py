@@ -17,9 +17,9 @@ root_key = BIP32Key.fromEntropy(seed)
 
 num_addresses = 5  # Number of addresses to generate
 for i in range(num_addresses):
-    # Step 5: Derive the first Bitcoin address (m/32'/0'/0'/0)
+    # Step 5: Derive the first Bitcoin address (m/44'/0'/0'/0)
     BIP32_HARDEN = 0x80000000
-    address_key = root_key.ChildKey(32 + BIP32_HARDEN) \
+    address_key = root_key.ChildKey(44 + BIP32_HARDEN) \
                          .ChildKey(0 + BIP32_HARDEN) \
                          .ChildKey(0 + BIP32_HARDEN) \
                          .ChildKey(0) \
@@ -28,7 +28,7 @@ for i in range(num_addresses):
     private_key = address_key.WalletImportFormat()
 
     print("++++++++++++++++++++++++++++++++++++++++++++")
-    print(f"derivation_path: m/32'/0'/0'/0/{i}")
+    print(f"derivation_path: m/44'/0'/0'/0/{i}")
     print(f"address:", address)
     print(f"public_key:", address_key.PublicKey().hex())
     print(f"private_key:", private_key)
