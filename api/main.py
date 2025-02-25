@@ -28,10 +28,11 @@ class AddressRequest(BaseModel):
     mnemonic: str
     num_addresses: Optional[int] = 5
 class AddressDetails(BaseModel):
-    address: str
-    private_key: str
-    public_key: str
     derivation_path: str
+    address: str
+    public_key: str
+    private_key: str
+    
 class AddressListResponse(BaseModel):
     addresses: list[AddressDetails]
 class BrainWalletRequest(BaseModel):
@@ -106,17 +107,17 @@ async def _generate_bip32_addresses(request: AddressRequest):
                                  .ChildKey(i)
             
             # Extract address, private key (WIF), public key, and derivation path
-            address = address_key.Address()
-            private_key = address_key.WalletImportFormat()
-            public_key = address_key.PublicKey().hex()
             derivation_path = f"m/32'/0'/0'/0/{i}"
+            address = address_key.Address()
+            public_key = address_key.PublicKey().hex()
+            private_key = address_key.WalletImportFormat()
             
             # Add the address details to the list
             addresses.append({
+                "derivation_path": derivation_path,
                 "address": address,
-                "private_key": private_key,
                 "public_key": public_key,
-                "derivation_path": derivation_path
+                "private_key": private_key
             })
         
         return {"addresses": addresses}
