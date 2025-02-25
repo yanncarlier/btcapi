@@ -38,9 +38,9 @@ class AddressListResponse(BaseModel):
 class BrainWalletRequest(BaseModel):
     passphrase: str
 class BrainWalletResponse(BaseModel):
-    wif_private_key: str
     bitcoin_address: str
     public_key: str
+    wif_private_key: str
 # Helper function for brain wallet (unchanged)
 def generate_brain_wallet(passphrase):
     private_key = hashlib.sha256(passphrase.encode('utf-8')).digest()
