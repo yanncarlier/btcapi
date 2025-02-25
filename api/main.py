@@ -15,7 +15,7 @@ app = FastAPI(
     description="An API to generate mnemonic seeds and various types of Bitcoin addresses.",
     servers=[
         {"url": "http://127.0.0.1:8000", "description": "Development server"},
-        {"url": "https://btc-tx-gw-yanncarliers-projects.vercel.app/", "description": "Production environment"},
+        {"url": "https://btc-tx-gw.vercel.app", "description": "Production environment"},
     ]
 )
 BIP32_HARDEN = 0x80000000
