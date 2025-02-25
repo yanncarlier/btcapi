@@ -38,3 +38,6 @@ curl -X POST "http://127.0.0.1:8000/generate-bip49-addresses" -H "Content-Type: 
 curl -X POST "http://127.0.0.1:8000/generate-brain-wallet" -H "Content-Type: application/json" -d '{"passphrase":"your secret passphrase"}'
 ```
 
+### Online docs:
+
+https://maroon-raven-main-3cc16aa.d2.zuplo.dev/docs
