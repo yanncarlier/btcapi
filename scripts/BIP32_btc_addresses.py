@@ -21,4 +21,9 @@ address_key = root_key.ChildKey(32 + BIP32_HARDEN) \
                      .ChildKey(0) \
                      .ChildKey(0)
 address = address_key.Address()
+private_key = address_key.WalletImportFormat()
+
+print("Path: m/32'/0'/0'/0")
+print("Public Key (Hex):", address_key.PublicKey().hex())
 print("Bitcoin Address:", address)
+print("Private Key (WIF):", private_key)
