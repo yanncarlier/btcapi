@@ -8,6 +8,7 @@ from bip_utils import (
     Bip39SeedGenerator, Bip44, Bip44Coins, Bip44Changes,
     Bip49, Bip49Coins, Bip84, Bip84Coins, Bip86, Bip86Coins
 )
+from bip32utils import BIP32Key
 app = FastAPI(
     title="Bitcoin Address Generation API",
     version="1.0.0",
@@ -17,6 +18,8 @@ app = FastAPI(
         {"url": "https://btc-tx-gw-yanncarliers-projects.vercel.app/", "description": "Production environment"},
     ]
 )
+BIP32_HARDEN = 0x80000000
+
 # Pydantic Models (unchanged)
 class MnemonicResponse(BaseModel):
     BIP39Mnemonic: str
@@ -64,6 +67,9 @@ async def generate_mnemonic():
     words = mnemo.generate(128)
     seed = mnemo.to_seed(words)
     return {"BIP39Mnemonic": words, "BIP39Seed": seed.hex()}
+@app.post("/generate-bip32-addresses", response_model=AddressListResponse)
+async def generate_bip32_addresses(request: AddressRequest = Body(...)):
+    return await _generate_bip32_addresses(request)
 @app.post("/generate-bip44-addresses", response_model=AddressListResponse)
 async def generate_addresses(request: AddressRequest = Body(...)):
     return await _generate_bip_addresses(request, Bip44, Bip44Coins.BITCOIN, 44)
@@ -80,6 +86,43 @@ async def generate_bip86_addresses(request: AddressRequest = Body(...)):
 @app.post("/generate-bip141-addresses", response_model=AddressListResponse)
 async def generate_bip141_addresses(request: AddressRequest = Body(...)):
     return await _generate_bip_addresses(request, Bip49, Bip49Coins.BITCOIN, 49)  # Uses BIP49 logic
+
+# New BIP32 endpoint
+async def _generate_bip32_addresses(request: AddressRequest):
+    try:
+        # Generate the seed from the mnemonic using Bip39SeedGenerator for consistency
+        seed_bytes = Bip39SeedGenerator(request.mnemonic).Generate()
+        
+        # Create the BIP32 root key from the seed
+        root_key = BIP32Key.fromEntropy(seed_bytes)
+        
+        addresses = []
+        for i in range(request.num_addresses):
+            # Derive the child key using the path m/32'/0'/0'/0/i
+            address_key = root_key.ChildKey(32 + BIP32_HARDEN) \
+                                 .ChildKey(0 + BIP32_HARDEN) \
+                                 .ChildKey(0 + BIP32_HARDEN) \
+                                 .ChildKey(0) \
+                                 .ChildKey(i)
+            
+            # Extract address, private key (WIF), public key, and derivation path
+            address = address_key.Address()
+            private_key = address_key.WalletImportFormat()
+            public_key = address_key.PublicKey().hex()
+            derivation_path = f"m/32'/0'/0'/0/{i}"
+            
+            # Add the address details to the list
+            addresses.append({
+                "address": address,
+                "private_key": private_key,
+                "public_key": public_key,
+                "derivation_path": derivation_path
+            })
+        
+        return {"addresses": addresses}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+# Helper function for BIP endpoints
 async def _generate_bip_addresses(request: AddressRequest, bip_class, coin_type, purpose: int):
     try:
         seed_bytes = Bip39SeedGenerator(request.mnemonic).Generate()
