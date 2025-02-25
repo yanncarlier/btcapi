@@ -13,6 +13,7 @@ fastapi dev main.py
 
 
 1. **Endpoints**:
+   - `/generate-bip32-addresses`: Generates BIP32 addresses.
    - `/generate-bip49-addresses`: Generates BIP49 (wrapped SegWit) addresses.
    - `/generate-bip84-addresses`: Generates BIP84 (native SegWit) addresses.
    - `/generate-bip86-addresses`: Generates BIP86 (Taproot) addresses.
@@ -36,3 +37,4 @@ curl -X POST "http://127.0.0.1:8000/generate-bip49-addresses" -H "Content-Type: 
 # Brain Wallet
 curl -X POST "http://127.0.0.1:8000/generate-brain-wallet" -H "Content-Type: application/json" -d '{"passphrase":"your secret passphrase"}'
 ```
+
