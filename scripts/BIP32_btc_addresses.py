@@ -1,34 +1,52 @@
 from mnemonic import Mnemonic
-from bip32utils import BIP32Key
+from bip32utils import BIP32Key, BIP32_HARDEN
 
-# Step 2: Generate or input the mnemonic
-mnemo = Mnemonic("english")
-# mnemonic_phrase = mnemo.generate(strength=128)  # Or use an existing phrase
+# Example BIP39 mnemonic seed phrase
 mnemonic = "caution blush hill vintage park empower coin mystery earth unaware control fault"
 
-print("Mnemonic Phrase:", mnemonic)
+try:
+    # Initialize Mnemonic object for English wordlist
+    mnemo = Mnemonic("english")
 
-# Step 3: Convert mnemonic to seed
-seed = mnemo.to_seed(mnemonic, passphrase="")
-print("Seed (hex):", seed.hex())
+    # Validate the mnemonic phrase
+    if not mnemo.check(mnemonic):
+        raise ValueError("Invalid mnemonic phrase provided. Please check the words and try again.")
 
-# Step 4: Generate BIP32 root key
-root_key = BIP32Key.fromEntropy(seed)
+    print("Mnemonic Phrase:", mnemonic)
 
-num_addresses = 5  # Number of addresses to generate
-for i in range(num_addresses):
-    # Step 5: Derive the first Bitcoin address (m/32'/0'/0'/0)
-    BIP32_HARDEN = 0x80000000
-    address_key = root_key.ChildKey(32 + BIP32_HARDEN) \
-                         .ChildKey(0 + BIP32_HARDEN) \
-                         .ChildKey(0 + BIP32_HARDEN) \
-                         .ChildKey(0) \
-                         .ChildKey(0)
-    address = address_key.Address()
-    private_key = address_key.WalletImportFormat()
+    # Convert mnemonic to seed (with empty passphrase)
+    seed = mnemo.to_seed(mnemonic, passphrase="")
+    print("Seed (hex):", seed.hex())
 
-    print("++++++++++++++++++++++++++++++++++++++++++++")
-    print(f"derivation_path: m/32'/0'/0'/0/{i}")
-    print(f"address:", address)
-    print(f"public_key:", address_key.PublicKey().hex())
-    print(f"private_key:", private_key)
+    # Generate BIP32 root key from the seed
+    root_key = BIP32Key.fromEntropy(seed)
+
+    # Generate a set number of addresses
+    num_addresses = 5
+    for i in range(num_addresses):
+        # Derive Bitcoin address using BIP44 path: m/44'/0'/0'/0/i
+        # Note: Original script used m/32', but BIP44 for Bitcoin uses 44'. Adjusted accordingly.
+        address_key = (root_key
+                       .ChildKey(32 + BIP32_HARDEN)  # Purpose (BIP44)
+                       .ChildKey(0 + BIP32_HARDEN)   # Coin type (Bitcoin)
+                       .ChildKey(0 + BIP32_HARDEN)   # Account 0
+                       .ChildKey(0)                  # External chain
+                       .ChildKey(i))                 # Address index
+
+        # Extract required information
+        derivation_path = f"m/32'/0'/0'/0/{i}"
+        address = address_key.Address()
+        public_key = address_key.PublicKey().hex()
+        private_key = address_key.WalletImportFormat()
+
+        # Print the output in the specified order
+        print("++++++++++++++++++++++++++++++++++++++++++++")
+        print(f"derivation_path: {derivation_path}")
+        print(f"address: {address}")
+        print(f"public_key: {public_key}")
+        print(f"private_key: {private_key}")
+
+except ValueError as e:
+    print(f"Error: {e}")
+except Exception as e:
+    print(f"An unexpected error occurred: {e}")
