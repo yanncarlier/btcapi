@@ -1,6 +1,6 @@
 '''
-Generates BIP86 (Taproot P2TR) Addresses.
-BIP86 (Taproot, P2TR) uses 86'.
+Generates Taproot (P2TR) addresses using BIP86, an implementation of Segregated Witness (BIP141) with Schnorr signatures (BIP340).
+BIP86 specifies the derivation path m/86'/0'/0'/0/i for Taproot addresses.
 '''
 from bip_utils import (
     Bip39SeedGenerator,
@@ -33,24 +33,22 @@ try:
     bip86_mst_ctx = Bip86.FromSeed(seed_bytes, Bip86Coins.BITCOIN)
     bip86_acc_ctx = bip86_mst_ctx.Purpose().Coin().Account(0)
 
-    # Derive the external chain (CHAIN_EXT = 0)
-    bip86_chg_ctx = bip86_acc_ctx.Change(Bip44Changes.CHAIN_EXT)
-
-    # Generate a set number of BIP86 Taproot addresses
-    num_addresses = 1
-    print("Generating BIP86 (Taproot P2TR) Addresses:")
+    # Generate a set number of BIP86 addresses (Taproot, enabled by BIP341)
+    num_addresses = 1  # Adjustable for more addresses
+    print("Generating Taproot (P2TR) Addresses via BIP86:")
 
     for i in range(num_addresses):
-        # Derive address at index i
+        # Derive the external chain and address at index i
+        bip86_chg_ctx = bip86_acc_ctx.Change(Bip44Changes.CHAIN_EXT)
         bip86_addr_ctx = bip86_chg_ctx.AddressIndex(i)
 
         # Construct derivation path manually (BIP86: m/86'/0'/0'/0/i)
         derivation_path = f"m/86'/0'/0'/0/{i}"
-        address = bip86_addr_ctx.PublicKey().ToAddress()  # Taproot address (P2TR)
+        address = bip86_addr_ctx.PublicKey().ToAddress()  # Taproot address (starts with 'bc1p')
         public_key = bip86_addr_ctx.PublicKey().RawCompressed().ToHex()  # Compressed public key in hex
         private_key = bip86_addr_ctx.PrivateKey().ToWif()  # Private key in WIF format
 
-        # Output in specified order
+        # Output in a structured format
         print("{")
         print(f"derivation_path: {derivation_path}")
         print(f"address: {address}")
