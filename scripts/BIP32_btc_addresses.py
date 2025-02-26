@@ -40,11 +40,12 @@ try:
         private_key = address_key.WalletImportFormat()
 
         # Print the output in the specified order
-        print("++++++++++++++++++++++++++++++++++++++++++++")
+        print("{")
         print(f"derivation_path: {derivation_path}")
         print(f"address: {address}")
         print(f"public_key: {public_key}")
         print(f"private_key: {private_key}")
+        print("},")
 
 except ValueError as e:
     print(f"Error: {e}")

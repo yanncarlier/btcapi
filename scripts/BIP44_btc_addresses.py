@@ -32,11 +32,12 @@ try:
         private_key = bip44_addr_ctx.PrivateKey().ToWif()  # Private key in WIF format
 
         # Print the output in the specified order
-        print("++++++++++++++++++++++++++++++++++++++++++++")
+        print("{")
         print(f"derivation_path: {derivation_path}")
         print(f"address: {address}")
         print(f"public_key: {public_key}")
         print(f"private_key: {private_key}")
+        print("},")
 
 except MnemonicChecksumError as e:
     print(f"Error: Invalid mnemonic checksum. Details: {e}")
