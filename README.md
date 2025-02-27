@@ -1,6 +1,6 @@
 # btc_tx_gw
 
-### bitcoin transaction gateway
+### bitcoin tools gateway
 
 ```
 python -m venv .venv
