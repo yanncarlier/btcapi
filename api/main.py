@@ -1,7 +1,10 @@
-from fastapi import FastAPI, HTTPException, Body
-from pydantic import BaseModel
+# Standard Library Imports
 from typing import Optional
 import hashlib
+
+# Third-Party Imports
+from fastapi import FastAPI, HTTPException, Body
+from pydantic import BaseModel
 import ecdsa
 import base58
 from bip_utils import (
@@ -15,11 +18,11 @@ from mnemonic import Mnemonic
 # Constants
 MAX_ADDRESSES = 42  # Maximum number of addresses that can be generated per request
 
-# Initialize FastAPI app with metadata
+# FastAPI Application Setup
 app = FastAPI(
     title="Bitcoin Address Generation API",
     version="1.0.0",
-    description="An API to generate mnemonic seeds and various types of Bitcoin addresses including BIP32, BIP44, BIP49, BIP84, BIP86, and BIP85, with additional support for BIP141-compatible addresses via BIP49 and BIP84.",
+    description="API for generating Bitcoin mnemonic seeds and various address types (BIP32, BIP44, BIP49, BIP84, BIP86, BIP85) including BIP141-compatible addresses.",
     servers=[
         {"url": "http://127.0.0.1:8000", "description": "Development server"},
         {"url": "https://btc-tx-gw.vercel.app", "description": "Production environment"},
@@ -64,6 +67,81 @@ class BIP85Response(BaseModel):
     derivation_path: str
     child_mnemonic: str
 
+
+# Helper Functions
+def generate_brain_wallet(passphrase: str) -> tuple[str, str, str]:
+    """Generate a brain wallet from a passphrase."""
+    private_key = hashlib.sha256(passphrase.encode('utf-8')).digest()
+    wif_private_key = b'\x80' + private_key
+    sha = hashlib.sha256(wif_private_key).digest()
+    checksum = hashlib.sha256(sha).digest()[:4]
+    wif = base58.b58encode(wif_private_key + checksum).decode('utf-8')
+    sk = ecdsa.SigningKey.from_string(private_key, curve=ecdsa.SECP256k1)
+    vk = sk.get_verifying_key()
+    public_key = b'\x04' + vk.to_string()
+    sha_pub = hashlib.sha256(public_key).digest()
+    ripemd160 = hashlib.new('ripemd160', sha_pub).digest()
+    bin_addr = b'\x00' + ripemd160
+    checksum_addr = hashlib.sha256(hashlib.sha256(bin_addr).digest()).digest()[:4]
+    address = base58.b58encode(bin_addr + checksum_addr).decode('utf-8')
+    return wif, address, public_key.hex()
+
+async def _generate_bip32_addresses(request: AddressRequest) -> dict:
+    """Generate BIP32 addresses using bip32utils."""
+    try:
+        if not Bip39MnemonicValidator().IsValid(request.mnemonic):
+            raise ValueError("Invalid mnemonic phrase.")
+        if request.num_addresses < 1 or request.num_addresses > MAX_ADDRESSES:
+            raise ValueError(f"Number of addresses must be between 1 and {MAX_ADDRESSES}")
+        seed_bytes = Bip39SeedGenerator(request.mnemonic).Generate(passphrase=request.passphrase)
+        root_key = BIP32Key.fromEntropy(seed_bytes)
+        addresses = []
+        for i in range(request.num_addresses):
+            address_key = (root_key
+                           .ChildKey(32 + BIP32_HARDEN)
+                           .ChildKey(0 + BIP32_HARDEN)
+                           .ChildKey(0 + BIP32_HARDEN)
+                           .ChildKey(0)
+                           .ChildKey(i))
+            derivation_path = f"m/32'/0'/0'/0/{i}"
+            address = address_key.Address()
+            public_key = address_key.PublicKey().hex()
+            private_key = address_key.WalletImportFormat()
+            addresses.append({
+                "derivation_path": derivation_path,
+                "address": address,
+                "public_key": public_key,
+                "private_key": private_key
+            })
+        return {"addresses": addresses}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+async def _generate_bip_addresses(request: AddressRequest, bip_class, coin_type, purpose: int) -> dict:
+    """Generic helper to generate BIP addresses (BIP44, BIP49, BIP84, BIP86)."""
+    try:
+        if not Bip39MnemonicValidator().IsValid(request.mnemonic):
+            raise ValueError("Invalid mnemonic phrase.")
+        if request.num_addresses < 1 or request.num_addresses > MAX_ADDRESSES:
+            raise ValueError(f"Number of addresses must be between 1 and {MAX_ADDRESSES}")
+        seed_bytes = Bip39SeedGenerator(request.mnemonic).Generate(passphrase=request.passphrase)
+        bip_ctx = bip_class.FromSeed(seed_bytes, coin_type).Purpose().Coin().Account(0)
+        change_ctx = bip_ctx.Change(Bip44Changes.CHAIN_EXT)
+        addresses = []
+        for i in range(request.num_addresses):
+            addr_ctx = change_ctx.AddressIndex(i)
+            public_key_bytes = addr_ctx.PublicKey().RawCompressed().ToBytes()
+            derivation_path = f"m/{purpose}'/0'/0'/0/{i}"
+            addresses.append({
+                "address": str(addr_ctx.PublicKey().ToAddress()),
+                "private_key": addr_ctx.PrivateKey().ToWif(),
+                "public_key": public_key_bytes.hex(),
+                "derivation_path": derivation_path
+            })
+        return {"addresses": addresses}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    
 # API Endpoints
 @app.get("/")
 async def read_root():
@@ -163,81 +241,6 @@ async def generate_bip85_child_mnemonic(request: BIP85Request = Body(...)):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail="An unexpected error occurred.")
-
-
-# Helper Functions
-def generate_brain_wallet(passphrase: str) -> tuple[str, str, str]:
-    """Generate a brain wallet from a passphrase."""
-    private_key = hashlib.sha256(passphrase.encode('utf-8')).digest()
-    wif_private_key = b'\x80' + private_key
-    sha = hashlib.sha256(wif_private_key).digest()
-    checksum = hashlib.sha256(sha).digest()[:4]
-    wif = base58.b58encode(wif_private_key + checksum).decode('utf-8')
-    sk = ecdsa.SigningKey.from_string(private_key, curve=ecdsa.SECP256k1)
-    vk = sk.get_verifying_key()
-    public_key = b'\x04' + vk.to_string()
-    sha_pub = hashlib.sha256(public_key).digest()
-    ripemd160 = hashlib.new('ripemd160', sha_pub).digest()
-    bin_addr = b'\x00' + ripemd160
-    checksum_addr = hashlib.sha256(hashlib.sha256(bin_addr).digest()).digest()[:4]
-    address = base58.b58encode(bin_addr + checksum_addr).decode('utf-8')
-    return wif, address, public_key.hex()
-
-async def _generate_bip32_addresses(request: AddressRequest) -> dict:
-    """Generate BIP32 addresses using bip32utils."""
-    try:
-        if not Bip39MnemonicValidator().IsValid(request.mnemonic):
-            raise ValueError("Invalid mnemonic phrase.")
-        if request.num_addresses < 1 or request.num_addresses > MAX_ADDRESSES:
-            raise ValueError(f"Number of addresses must be between 1 and {MAX_ADDRESSES}")
-        seed_bytes = Bip39SeedGenerator(request.mnemonic).Generate(passphrase=request.passphrase)
-        root_key = BIP32Key.fromEntropy(seed_bytes)
-        addresses = []
-        for i in range(request.num_addresses):
-            address_key = (root_key
-                           .ChildKey(32 + BIP32_HARDEN)
-                           .ChildKey(0 + BIP32_HARDEN)
-                           .ChildKey(0 + BIP32_HARDEN)
-                           .ChildKey(0)
-                           .ChildKey(i))
-            derivation_path = f"m/32'/0'/0'/0/{i}"
-            address = address_key.Address()
-            public_key = address_key.PublicKey().hex()
-            private_key = address_key.WalletImportFormat()
-            addresses.append({
-                "derivation_path": derivation_path,
-                "address": address,
-                "public_key": public_key,
-                "private_key": private_key
-            })
-        return {"addresses": addresses}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-async def _generate_bip_addresses(request: AddressRequest, bip_class, coin_type, purpose: int) -> dict:
-    """Generic helper to generate BIP addresses (BIP44, BIP49, BIP84, BIP86)."""
-    try:
-        if not Bip39MnemonicValidator().IsValid(request.mnemonic):
-            raise ValueError("Invalid mnemonic phrase.")
-        if request.num_addresses < 1 or request.num_addresses > MAX_ADDRESSES:
-            raise ValueError(f"Number of addresses must be between 1 and {MAX_ADDRESSES}")
-        seed_bytes = Bip39SeedGenerator(request.mnemonic).Generate(passphrase=request.passphrase)
-        bip_ctx = bip_class.FromSeed(seed_bytes, coin_type).Purpose().Coin().Account(0)
-        change_ctx = bip_ctx.Change(Bip44Changes.CHAIN_EXT)
-        addresses = []
-        for i in range(request.num_addresses):
-            addr_ctx = change_ctx.AddressIndex(i)
-            public_key_bytes = addr_ctx.PublicKey().RawCompressed().ToBytes()
-            derivation_path = f"m/{purpose}'/0'/0'/0/{i}"
-            addresses.append({
-                "address": str(addr_ctx.PublicKey().ToAddress()),
-                "private_key": addr_ctx.PrivateKey().ToWif(),
-                "public_key": public_key_bytes.hex(),
-                "derivation_path": derivation_path
-            })
-        return {"addresses": addresses}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
 
 # Run the application
 if __name__ == "__main__":
