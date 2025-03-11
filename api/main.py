@@ -38,7 +38,7 @@ class AddressRequest(BaseModel):
     mnemonic: str
     passphrase: Optional[str] = ""  # Optional passphrase, defaults to empty string
     num_addresses: Optional[int] = 1  # Default to 1 address
-    include_private_keys: bool = True  # New field to control private key inclusion
+    include_private_keys: bool = False  # New field to control private key inclusion
 
 class AddressDetails(BaseModel):
     derivation_path: str
@@ -51,7 +51,7 @@ class AddressListResponse(BaseModel):
 
 class BrainWalletRequest(BaseModel):
     passphrase: str
-    include_private_keys: bool = True  # New field to control private key inclusion
+    include_private_keys: bool = False  # New field to control private key inclusion
 
 class BrainWalletResponse(BaseModel):
     bitcoin_address: str
