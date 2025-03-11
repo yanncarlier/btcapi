@@ -231,6 +231,7 @@ async def generate_bip85_child_mnemonic(request: BIP85Request = Body(...)):
         child_entropy = child_key.PrivateKey()[:entropy_len]
         child_mnemonic = mnemo.to_mnemonic(child_entropy)
 
+        # Derivation path m/49'/0'/0'/0
         derivation_path = f"m/83696968'/{request.app_index}'/{request.index}'"
 
         return {
