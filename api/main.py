@@ -38,23 +38,25 @@ class AddressRequest(BaseModel):
     mnemonic: str
     passphrase: Optional[str] = ""  # Optional passphrase, defaults to empty string
     num_addresses: Optional[int] = 1  # Default to 1 address
+    include_private_keys: bool = True  # New field to control private key inclusion
 
 class AddressDetails(BaseModel):
     derivation_path: str
     address: str
     public_key: str
-    private_key: str
+    private_key: Optional[str] = None  # Changed to optional
 
 class AddressListResponse(BaseModel):
     addresses: list[AddressDetails]
 
 class BrainWalletRequest(BaseModel):
     passphrase: str
+    include_private_keys: bool = True  # New field to control private key inclusion
 
 class BrainWalletResponse(BaseModel):
     bitcoin_address: str
     public_key: str
-    wif_private_key: str
+    wif_private_key: Optional[str] = None  # Changed to optional
 
 class BIP85Request(BaseModel):
     mnemonic: str
@@ -66,7 +68,6 @@ class BIP85Request(BaseModel):
 class BIP85Response(BaseModel):
     derivation_path: str
     child_mnemonic: str
-
 
 # Helper Functions
 def generate_brain_wallet(passphrase: str) -> tuple[str, str, str]:
@@ -106,7 +107,7 @@ async def _generate_bip32_addresses(request: AddressRequest) -> dict:
             derivation_path = f"m/32'/0'/0'/0/{i}"
             address = address_key.Address()
             public_key = address_key.PublicKey().hex()
-            private_key = address_key.WalletImportFormat()
+            private_key = address_key.WalletImportFormat() if request.include_private_keys else None
             addresses.append({
                 "derivation_path": derivation_path,
                 "address": address,
@@ -132,16 +133,17 @@ async def _generate_bip_addresses(request: AddressRequest, bip_class, coin_type,
             addr_ctx = change_ctx.AddressIndex(i)
             public_key_bytes = addr_ctx.PublicKey().RawCompressed().ToBytes()
             derivation_path = f"m/{purpose}'/0'/0'/0/{i}"
+            private_key = addr_ctx.PrivateKey().ToWif() if request.include_private_keys else None
             addresses.append({
                 "address": str(addr_ctx.PublicKey().ToAddress()),
-                "private_key": addr_ctx.PrivateKey().ToWif(),
+                "private_key": private_key,
                 "public_key": public_key_bytes.hex(),
                 "derivation_path": derivation_path
             })
         return {"addresses": addresses}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-    
+
 # API Endpoints
 @app.get("/")
 async def read_root():
@@ -162,13 +164,13 @@ async def generate_brain_wallet_endpoint(request: BrainWalletRequest = Body(...)
     try:
         wif, addr, pub_key = generate_brain_wallet(request.passphrase)
         return {
-            "wif_private_key": wif,
             "bitcoin_address": addr,
-            "public_key": pub_key
+            "public_key": pub_key,
+            "wif_private_key": wif if request.include_private_keys else None
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-    
+
 @app.post("/generate-bip32-addresses", response_model=AddressListResponse)
 async def generate_bip32_addresses(request: AddressRequest = Body(...)):
     """Generate BIP32 addresses from a mnemonic."""
@@ -194,7 +196,6 @@ async def generate_bip86_addresses(request: AddressRequest = Body(...)):
     """Generate BIP86 (Taproot) addresses from a mnemonic."""
     return await _generate_bip_addresses(request, Bip86, Bip86Coins.BITCOIN, 86)
 
-# New endpoints added from BIP141 scripts
 @app.post("/generate-bip141-wrapped-segwit-via-bip49", response_model=AddressListResponse)
 async def generate_bip141_wrapped_segwit_via_bip49(request: AddressRequest = Body(...)):
     """Generate BIP141-compatible Wrapped SegWit (P2SH-P2WPKH) addresses using BIP49."""
@@ -231,9 +232,7 @@ async def generate_bip85_child_mnemonic(request: BIP85Request = Body(...)):
         child_entropy = child_key.PrivateKey()[:entropy_len]
         child_mnemonic = mnemo.to_mnemonic(child_entropy)
 
-        # Derivation path m/49'/0'/0'/0
         derivation_path = f"m/83696968'/{request.app_index}'/{request.index}'"
-
         return {
             "derivation_path": derivation_path,
             "child_mnemonic": child_mnemonic
