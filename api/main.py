@@ -69,6 +69,15 @@ class BIP85Response(BaseModel):
     derivation_path: str
     child_mnemonic: str
 
+class AllBipAddressesResponse(BaseModel):
+    BIP32: list[AddressDetails]
+    BIP44: list[AddressDetails]
+    BIP49: list[AddressDetails]
+    BIP84: list[AddressDetails]
+    BIP86: list[AddressDetails]
+    BIP141_Wrapped_SegWit_via_BIP49: list[AddressDetails]
+    BIP141_Native_SegWit_via_BIP84: list[AddressDetails]
+
 # Helper Functions
 def generate_brain_wallet(passphrase: str) -> tuple[str, str, str]:
     """Generate a brain wallet from a passphrase."""
@@ -145,12 +154,21 @@ async def _generate_bip_addresses(request: AddressRequest, bip_class, coin_type,
         raise HTTPException(status_code=400, detail=str(e))
 
 # API Endpoints
-@app.get("/")
+@app.get(
+    "/",
+    summary="Root Endpoint",
+    description="Returns a simple greeting message."
+)
 async def read_root():
     """Root endpoint returning a simple greeting."""
     return {"Hello": "World"}
 
-@app.get("/generate-mnemonic", response_model=MnemonicResponse)
+@app.get(
+    "/generate-mnemonic",
+    response_model=MnemonicResponse,
+    summary="Generate BIP39 Mnemonic",
+    description="Generates a new BIP39 mnemonic phrase and its corresponding seed."
+)
 async def generate_mnemonic():
     """Generate a new BIP39 mnemonic and seed."""
     mnemo = Mnemonic("english")
@@ -158,7 +176,12 @@ async def generate_mnemonic():
     seed = mnemo.to_seed(words)
     return {"BIP39Mnemonic": words, "BIP39Seed": seed.hex()}
 
-@app.post("/generate-brain-wallet", response_model=BrainWalletResponse)
+@app.post(
+    "/generate-brain-wallet",
+    response_model=BrainWalletResponse,
+    summary="Generate Brain Wallet",
+    description="Generates a Bitcoin address and keys from a user-provided passphrase using a brain wallet approach."
+)
 async def generate_brain_wallet_endpoint(request: BrainWalletRequest = Body(...)):
     """Generate a brain wallet from a passphrase."""
     try:
@@ -171,42 +194,82 @@ async def generate_brain_wallet_endpoint(request: BrainWalletRequest = Body(...)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@app.post("/generate-bip32-addresses", response_model=AddressListResponse)
+@app.post(
+    "/generate-bip32-addresses",
+    response_model=AddressListResponse,
+    summary="Generate BIP32 Addresses",
+    description="Generates BIP32 legacy Bitcoin addresses from a mnemonic phrase."
+)
 async def generate_bip32_addresses(request: AddressRequest = Body(...)):
     """Generate BIP32 addresses from a mnemonic."""
     return await _generate_bip32_addresses(request)
 
-@app.post("/generate-bip44-addresses", response_model=AddressListResponse)
+@app.post(
+    "/generate-bip44-addresses",
+    response_model=AddressListResponse,
+    summary="Generate BIP44 Addresses",
+    description="Generates BIP44 legacy Bitcoin addresses (P2PKH) from a mnemonic phrase."
+)
 async def generate_addresses(request: AddressRequest = Body(...)):
     """Generate BIP44 addresses from a mnemonic."""
     return await _generate_bip_addresses(request, Bip44, Bip44Coins.BITCOIN, 44)
 
-@app.post("/generate-bip49-addresses", response_model=AddressListResponse)
+@app.post(
+    "/generate-bip49-addresses",
+    response_model=AddressListResponse,
+    summary="Generate BIP49 Addresses",
+    description="Generates BIP49 Wrapped SegWit (P2SH-P2WPKH) Bitcoin addresses from a mnemonic phrase."
+)
 async def generate_bip49_addresses(request: AddressRequest = Body(...)):
     """Generate BIP49 (Wrapped SegWit P2SH-P2WPKH) addresses from a mnemonic."""
     return await _generate_bip_addresses(request, Bip49, Bip49Coins.BITCOIN, 49)
 
-@app.post("/generate-bip84-addresses", response_model=AddressListResponse)
+@app.post(
+    "/generate-bip84-addresses",
+    response_model=AddressListResponse,
+    summary="Generate BIP84 Addresses",
+    description="Generates BIP84 Native SegWit (P2WPKH) Bitcoin addresses from a mnemonic phrase."
+)
 async def generate_bip84_addresses(request: AddressRequest = Body(...)):
     """Generate BIP84 (Native SegWit P2WPKH) addresses from a mnemonic."""
     return await _generate_bip_addresses(request, Bip84, Bip84Coins.BITCOIN, 84)
 
-@app.post("/generate-bip86-addresses", response_model=AddressListResponse)
+@app.post(
+    "/generate-bip86-addresses",
+    response_model=AddressListResponse,
+    summary="Generate BIP86 Addresses",
+    description="Generates BIP86 Taproot (P2TR) Bitcoin addresses from a mnemonic phrase."
+)
 async def generate_bip86_addresses(request: AddressRequest = Body(...)):
     """Generate BIP86 (Taproot) addresses from a mnemonic."""
     return await _generate_bip_addresses(request, Bip86, Bip86Coins.BITCOIN, 86)
 
-@app.post("/generate-bip141-wrapped-segwit-via-bip49", response_model=AddressListResponse)
+@app.post(
+    "/generate-bip141-wrapped-segwit-via-bip49",
+    response_model=AddressListResponse,
+    summary="Generate BIP141 Wrapped SegWit via BIP49",
+    description="Generates BIP141-compatible Wrapped SegWit (P2SH-P2WPKH) Bitcoin addresses using BIP49 derivation."
+)
 async def generate_bip141_wrapped_segwit_via_bip49(request: AddressRequest = Body(...)):
     """Generate BIP141-compatible Wrapped SegWit (P2SH-P2WPKH) addresses using BIP49."""
     return await _generate_bip_addresses(request, Bip49, Bip49Coins.BITCOIN, 49)
 
-@app.post("/generate-bip141-native-segwit-via-bip84", response_model=AddressListResponse)
+@app.post(
+    "/generate-bip141-native-segwit-via-bip84",
+    response_model=AddressListResponse,
+    summary="Generate BIP141 Native SegWit via BIP84",
+    description="Generates BIP141-compatible Native SegWit (P2WPKH) Bitcoin addresses using BIP84 derivation."
+)
 async def generate_bip141_native_segwit_via_bip84(request: AddressRequest = Body(...)):
     """Generate BIP141-compatible Native SegWit (P2WPKH) addresses using BIP84."""
     return await _generate_bip_addresses(request, Bip84, Bip84Coins.BITCOIN, 84)
 
-@app.post("/generate-bip85-child-mnemonic", response_model=BIP85Response)
+@app.post(
+    "/generate-bip85-child-mnemonic",
+    response_model=BIP85Response,
+    summary="Generate BIP85 Child Mnemonic",
+    description="Generates a BIP85 child mnemonic from a master mnemonic for deterministic derivation of additional mnemonics."
+)
 async def generate_bip85_child_mnemonic(request: BIP85Request = Body(...)):
     """Generate a BIP85 child mnemonic from a master mnemonic."""
     try:
@@ -241,6 +304,43 @@ async def generate_bip85_child_mnemonic(request: BIP85Request = Body(...)):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail="An unexpected error occurred.")
+
+@app.post(
+    "/generate-all-bip-addresses",
+    response_model=AllBipAddressesResponse,
+    summary="Generate All BIP Addresses",
+    description="Generates addresses for all supported BIP types (BIP32, BIP44, BIP49, BIP84, BIP86) from a mnemonic phrase. Includes legacy, P2PKH, P2SH-P2WPKH, P2WPKH, and P2TR addresses."
+)
+async def generate_all_bip_addresses(request: AddressRequest = Body(...)):
+    """Generate addresses for all supported BIP types from a mnemonic."""
+    # Validate mnemonic
+    if not Bip39MnemonicValidator().IsValid(request.mnemonic):
+        raise HTTPException(status_code=400, detail="Invalid mnemonic phrase.")
+    
+    # Validate number of addresses
+    if request.num_addresses < 1 or request.num_addresses > MAX_ADDRESSES:
+        raise HTTPException(status_code=400, detail=f"Number of addresses must be between 1 and {MAX_ADDRESSES}")
+
+    # Generate addresses for each BIP type
+    bip32_addresses = (await _generate_bip32_addresses(request))["addresses"]
+    bip44_addresses = (await _generate_bip_addresses(request, Bip44, Bip44Coins.BITCOIN, 44))["addresses"]
+    bip49_addresses = (await _generate_bip_addresses(request, Bip49, Bip49Coins.BITCOIN, 49))["addresses"]
+    bip84_addresses = (await _generate_bip_addresses(request, Bip84, Bip84Coins.BITCOIN, 84))["addresses"]
+    bip86_addresses = (await _generate_bip_addresses(request, Bip86, Bip86Coins.BITCOIN, 86))["addresses"]
+    # Include BIP141-compatible addresses (same as BIP49 and BIP84)
+    bip141_wrapped_segwit = bip49_addresses  # Identical to BIP49
+    bip141_native_segwit = bip84_addresses   # Identical to BIP84
+
+    # Return structured response
+    return {
+        "BIP32": bip32_addresses,
+        "BIP44": bip44_addresses,
+        "BIP49": bip49_addresses,
+        "BIP84": bip84_addresses,
+        "BIP86": bip86_addresses,
+        "BIP141_Wrapped_SegWit_via_BIP49": bip141_wrapped_segwit,
+        "BIP141_Native_SegWit_via_BIP84": bip141_native_segwit
+    }
 
 # Run the application
 if __name__ == "__main__":
