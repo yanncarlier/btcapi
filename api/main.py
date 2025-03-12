@@ -25,7 +25,8 @@ app = FastAPI(
     description="API for generating Bitcoin mnemonic seeds and various address types (BIP32, BIP44, BIP49, BIP84, BIP86, BIP85) including BIP141-compatible addresses.",
     servers=[
         {"url": "http://127.0.0.1:8000", "description": "Development server"},
-        {"url": "https://btc-tx-gw.vercel.app", "description": "Production environment"},
+        {"url": "https://btc-tx-gw.vercel.app", "description": "Production L1 environment"},
+        {"url": "https://btc-tx-gw.bitcoin-tx.com", "description": "Production L2 environment"}
     ]
 )
 
