@@ -4,6 +4,8 @@ import hashlib
 
 # Third-Party Imports
 from fastapi import FastAPI, HTTPException, Body
+from fastapi.middleware.cors import CORSMiddleware
+
 from pydantic import BaseModel
 import ecdsa
 import base58
@@ -14,6 +16,8 @@ from bip_utils import (
 )
 from bip32utils import BIP32Key, BIP32_HARDEN
 from mnemonic import Mnemonic
+
+
 
 # Constants
 MAX_ADDRESSES = 42  # Maximum number of addresses that can be generated per request
@@ -27,6 +31,21 @@ app = FastAPI(
         {"url": "http://127.0.0.1:8000", "description": "Development server"},
         {"url": "https://btc-tx-gw.vercel.app", "description": "Production environment"},
     ]
+)
+
+# Replace with your frontend's origin
+origins = [
+    "http://localhost:3000",
+    "https://6bitcoin-txcom.vercel.app",
+]
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,  
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all HTTP methods (GET, POST, etc.)
+    allow_headers=["*"],  # Allows all headers
 )
 
 # Pydantic Models for Request and Response Validation
