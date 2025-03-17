@@ -69,7 +69,7 @@ This is a FastAPI-based RESTful API for generating Bitcoin mnemonic seeds and va
 ## Running the API
 
 - **Local Development**: Use the command above to run on http://127.0.0.1:8000
-- **Production**: Deploy to a server (e.g., Vercel) using the provided configuration https://maroon-raven-main-3cc16aa.d2.zuplo.dev/docs 
+- **Production**: Deploy to a server (e.g., Vercel) https://btc-tx-gw.vercel.app
 
 ## Accessing Documentation
 
