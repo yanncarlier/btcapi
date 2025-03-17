@@ -20,7 +20,7 @@ from mnemonic import Mnemonic
 
 
 # Constants
-MAX_ADDRESSES = 42  # Maximum number of addresses that can be generated per request
+MAX_ADDRESSES = 10  # Maximum number of addresses that can be generated per request
 
 # FastAPI Application Setup
 app = FastAPI(

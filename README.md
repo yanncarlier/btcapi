@@ -180,7 +180,7 @@ json
 - **AddressRequest** (used by most POST endpoints):
   - mnemonic (str, required): BIP39 mnemonic phrase.
   - passphrase (str, optional): Passphrase for seed derivation (defaults to "").
-  - num_addresses (int, optional): Number of addresses to generate (1 to 42, defaults to 1).
+  - num_addresses (int, optional): Number of addresses to generate (1 to 10, defaults to 1).
   - include_private_keys (bool, optional): Include private keys in the response (defaults to false).
 - **BrainWalletRequest**:
   - passphrase (str, required): Passphrase for brain wallet generation.
