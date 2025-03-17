@@ -1,10 +1,13 @@
 # Standard Library Imports
 from typing import Optional
 import hashlib
+import threading
+from datetime import datetime, timedelta
 
 # Third-Party Imports
-from fastapi import FastAPI, HTTPException, Body
+from fastapi import FastAPI, HTTPException, Body, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from pydantic import BaseModel
 import ecdsa
@@ -17,10 +20,14 @@ from bip_utils import (
 from bip32utils import BIP32Key, BIP32_HARDEN
 from mnemonic import Mnemonic
 
-
-
 # Constants
 MAX_ADDRESSES = 10  # Maximum number of addresses that can be generated per request
+RATE_LIMIT = 60    # Maximum requests per IP
+TIME_FRAME = timedelta(hours=1)  # Time window for rate limiting
+
+# In-memory storage for rate limiting
+request_timestamps = {}
+rate_limit_lock = threading.Lock()
 
 # FastAPI Application Setup
 app = FastAPI(
@@ -44,9 +51,56 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,  
     allow_credentials=True,
-    allow_methods=["*"],  # Allows all HTTP methods (GET, POST, etc.)
-    allow_headers=["*"],  # Allows all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
+
+# Rate Limiting Middleware
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    client_ip = request.client.host
+    if not client_ip:
+        raise HTTPException(status_code=400, detail="Client IP not found")
+    
+    current_time = datetime.now()
+    window_start = current_time - TIME_FRAME
+    
+    with rate_limit_lock:
+        # Clean up old timestamps
+        if client_ip in request_timestamps:
+            request_timestamps[client_ip] = [ts for ts in request_timestamps[client_ip] if ts > window_start]
+            if not request_timestamps[client_ip]:
+                del request_timestamps[client_ip]
+        
+        # Check rate limit
+        if len(request_timestamps.get(client_ip, [])) >= RATE_LIMIT:
+            response = JSONResponse(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                content={"detail": "Rate limit exceeded"}
+            )
+            response.headers["X-RateLimit-Limit"] = str(RATE_LIMIT)
+            response.headers["X-RateLimit-Remaining"] = "0"
+            if request_timestamps.get(client_ip):
+                oldest_ts = request_timestamps[client_ip][0]
+                retry_after = (oldest_ts + TIME_FRAME - current_time).total_seconds()
+                response.headers["Retry-After"] = str(int(retry_after))
+            return response
+        
+        # Calculate remaining requests after this one
+        remaining = max(0, RATE_LIMIT - (len(request_timestamps.get(client_ip, [])) + 1))
+    
+    # Process the request
+    response = await call_next(request)
+    
+    with rate_limit_lock:
+        if client_ip not in request_timestamps:
+            request_timestamps[client_ip] = []
+        request_timestamps[client_ip].append(current_time)
+    
+    # Set rate limit headers
+    response.headers["X-RateLimit-Limit"] = str(RATE_LIMIT)
+    response.headers["X-RateLimit-Remaining"] = str(remaining)
+    return response
 
 # Pydantic Models for Request and Response Validation
 class MnemonicResponse(BaseModel):
@@ -55,34 +109,34 @@ class MnemonicResponse(BaseModel):
 
 class AddressRequest(BaseModel):
     mnemonic: str
-    passphrase: Optional[str] = ""  # Optional passphrase, defaults to empty string
-    num_addresses: Optional[int] = 1  # Default to 1 address
-    include_private_keys: bool = False  # New field to control private key inclusion
+    passphrase: Optional[str] = ""
+    num_addresses: Optional[int] = 1
+    include_private_keys: bool = False
 
 class AddressDetails(BaseModel):
     derivation_path: str
     address: str
     public_key: str
-    private_key: Optional[str] = None  # Changed to optional
+    private_key: Optional[str] = None
 
 class AddressListResponse(BaseModel):
     addresses: list[AddressDetails]
 
 class BrainWalletRequest(BaseModel):
     passphrase: str
-    include_private_keys: bool = False  # New field to control private key inclusion
+    include_private_keys: bool = False
 
 class BrainWalletResponse(BaseModel):
     bitcoin_address: str
     public_key: str
-    wif_private_key: Optional[str] = None  # Changed to optional
+    wif_private_key: Optional[str] = None
 
 class BIP85Request(BaseModel):
     mnemonic: str
     passphrase: Optional[str] = ""
-    app_index: int = 39  # Default to BIP39 mnemonics
-    word_count: int = 12  # Default to 12 words
-    index: int = 0       # Default to first child
+    app_index: int = 39
+    word_count: int = 12
+    index: int = 0
 
 class BIP85Response(BaseModel):
     derivation_path: str
@@ -191,7 +245,7 @@ async def read_root():
 async def generate_mnemonic():
     """Generate a new BIP39 mnemonic and seed."""
     mnemo = Mnemonic("english")
-    words = mnemo.generate(128)  # 128 bits of entropy for 12 words
+    words = mnemo.generate(128)
     seed = mnemo.to_seed(words)
     return {"BIP39Mnemonic": words, "BIP39Seed": seed.hex()}
 
@@ -307,7 +361,7 @@ async def generate_bip85_child_mnemonic(request: BIP85Request = Body(...)):
         master_key = BIP32Key.fromEntropy(seed)
 
         child_key = (master_key
-                     .ChildKey(83696968 + BIP32_HARDEN)  # BIP85 root
+                     .ChildKey(83696968 + BIP32_HARDEN)
                      .ChildKey(request.app_index + BIP32_HARDEN)
                      .ChildKey(request.index + BIP32_HARDEN))
 
@@ -328,29 +382,24 @@ async def generate_bip85_child_mnemonic(request: BIP85Request = Body(...)):
     "/generate-all-bip-addresses",
     response_model=AllBipAddressesResponse,
     summary="Generate All BIP Addresses",
-    description="Generates addresses for all supported BIP types (BIP32, BIP44, BIP49, BIP84, BIP86) from a mnemonic phrase. Includes legacy, P2PKH, P2SH-P2WPKH, P2WPKH, and P2TR addresses."
+    description="Generates addresses for all supported BIP types (BIP32, BIP44, BIP49, BIP84, BIP86) from a mnemonic phrase."
 )
 async def generate_all_bip_addresses(request: AddressRequest = Body(...)):
     """Generate addresses for all supported BIP types from a mnemonic."""
-    # Validate mnemonic
     if not Bip39MnemonicValidator().IsValid(request.mnemonic):
         raise HTTPException(status_code=400, detail="Invalid mnemonic phrase.")
     
-    # Validate number of addresses
     if request.num_addresses < 1 or request.num_addresses > MAX_ADDRESSES:
         raise HTTPException(status_code=400, detail=f"Number of addresses must be between 1 and {MAX_ADDRESSES}")
 
-    # Generate addresses for each BIP type
     bip32_addresses = (await _generate_bip32_addresses(request))["addresses"]
     bip44_addresses = (await _generate_bip_addresses(request, Bip44, Bip44Coins.BITCOIN, 44))["addresses"]
     bip49_addresses = (await _generate_bip_addresses(request, Bip49, Bip49Coins.BITCOIN, 49))["addresses"]
     bip84_addresses = (await _generate_bip_addresses(request, Bip84, Bip84Coins.BITCOIN, 84))["addresses"]
     bip86_addresses = (await _generate_bip_addresses(request, Bip86, Bip86Coins.BITCOIN, 86))["addresses"]
-    # Include BIP141-compatible addresses (same as BIP49 and BIP84)
-    bip141_wrapped_segwit = bip49_addresses  # Identical to BIP49
-    bip141_native_segwit = bip84_addresses   # Identical to BIP84
+    bip141_wrapped_segwit = bip49_addresses
+    bip141_native_segwit = bip84_addresses
 
-    # Return structured response
     return {
         "BIP32": bip32_addresses,
         "BIP44": bip44_addresses,
