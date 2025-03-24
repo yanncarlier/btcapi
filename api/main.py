@@ -37,6 +37,7 @@ app = FastAPI(
     servers=[
         {"url": "http://127.0.0.1:8000", "description": "Development server"},
         {"url": "https://btc-tx-gw.vercel.app", "description": "Production environment"},
+        {"url": "https://btc-tx-gw.bitcoin-tx.com", "description": "Production environment"}
     ]
 )
 
@@ -44,6 +45,7 @@ app = FastAPI(
 origins = [
     "http://localhost:3000",
     "https://6bitcoin-txcom.vercel.app",
+    "https://btc-tx-gw.bitcoin-tx.com"
 ]
 
 # Configure CORS
