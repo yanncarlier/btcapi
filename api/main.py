@@ -55,6 +55,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Middleware to add X-Content-Type-Options header
+@app.middleware("http")
+async def add_x_content_type_options_header(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
 # Rate Limiting Middleware
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
