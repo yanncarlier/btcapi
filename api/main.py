@@ -115,6 +115,7 @@ async def rate_limit_middleware(request: Request, call_next):
 class MnemonicResponse(BaseModel):
     BIP39Mnemonic: str
     BIP39Seed: str
+    BIP32RootKey: str
 
 class AddressRequest(BaseModel):
     mnemonic: str
@@ -252,11 +253,16 @@ async def read_root():
     description="Generates a new BIP39 mnemonic phrase and its corresponding seed."
 )
 async def generate_mnemonic():
-    """Generate a new BIP39 mnemonic and seed."""
+    """Generate a new BIP39 mnemonic, seed, and BIP32 Root Key."""
     mnemo = Mnemonic("english")
     words = mnemo.generate(128)
     seed = mnemo.to_seed(words)
-    return {"BIP39Mnemonic": words, "BIP39Seed": seed.hex()}
+    bip32_root_key = BIP32Key.fromEntropy(seed).ExtendedKey()
+    return {
+        "BIP39Mnemonic": words,
+        "BIP39Seed": seed.hex(),
+        "BIP32RootKey": bip32_root_key
+    }
 
 @app.post(
     "/generate-brain-wallet",
