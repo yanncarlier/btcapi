@@ -123,6 +123,7 @@ class AddressRequest(BaseModel):
     num_addresses: Optional[int] = 1
     include_private_keys: bool = False
     derivation_path: Optional[str] = "m/0/{index}"  # Default path with placeholder for index
+    hardened_addresses: bool = False  # New parameter to control hardened address generation
 
 class AddressDetails(BaseModel):
     derivation_path: str
@@ -190,23 +191,24 @@ async def _generate_bip32_addresses(request: AddressRequest) -> dict:
                 "private_key": private_key
             })
 
-            # Generate hardened address for the same index
-            hardened_derivation_path = derivation_path[:-len(path_parts[-1])] + f"{path_parts[-1]}'"
-            hardened_key = root_key
-            for part in hardened_derivation_path.split("/")[1:]:
-                if "'" in part:  # Hardened key
-                    hardened_key = hardened_key.ChildKey(int(part[:-1]) + BIP32_HARDEN)
-                else:
-                    hardened_key = hardened_key.ChildKey(int(part))
-            hardened_address = hardened_key.Address()
-            hardened_public_key = hardened_key.PublicKey().hex()
-            hardened_private_key = hardened_key.WalletImportFormat() if request.include_private_keys else None
-            addresses.append({
-                "derivation_path": hardened_derivation_path,
-                "address": hardened_address,
-                "public_key": hardened_public_key,
-                "private_key": hardened_private_key
-            })
+            if request.hardened_addresses:
+                # Generate hardened address for the same index
+                hardened_derivation_path = derivation_path[:-len(path_parts[-1])] + f"{path_parts[-1]}'"
+                hardened_key = root_key
+                for part in hardened_derivation_path.split("/")[1:]:
+                    if "'" in part:  # Hardened key
+                        hardened_key = hardened_key.ChildKey(int(part[:-1]) + BIP32_HARDEN)
+                    else:
+                        hardened_key = hardened_key.ChildKey(int(part))
+                hardened_address = hardened_key.Address()
+                hardened_public_key = hardened_key.PublicKey().hex()
+                hardened_private_key = hardened_key.WalletImportFormat() if request.include_private_keys else None
+                addresses.append({
+                    "derivation_path": hardened_derivation_path,
+                    "address": hardened_address,
+                    "public_key": hardened_public_key,
+                    "private_key": hardened_private_key
+                })
         return {"addresses": addresses}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -218,21 +220,40 @@ async def _generate_bip_addresses(request: AddressRequest, bip_class, coin_type,
             raise ValueError("Invalid mnemonic phrase.")
         if request.num_addresses < 1 or request.num_addresses > MAX_ADDRESSES:
             raise ValueError(f"Number of addresses must be between 1 and {MAX_ADDRESSES}")
+        
+        # Generate seed and initialize BIP context
         seed_bytes = Bip39SeedGenerator(request.mnemonic).Generate(passphrase=request.passphrase)
         bip_ctx = bip_class.FromSeed(seed_bytes, coin_type).Purpose().Coin().Account(0)
         change_ctx = bip_ctx.Change(Bip44Changes.CHAIN_EXT)
+        
         addresses = []
         for i in range(request.num_addresses):
-            addr_ctx = change_ctx.AddressIndex(i)
-            public_key_bytes = addr_ctx.PublicKey().RawCompressed().ToBytes()
-            derivation_path = f"m/{purpose}'/0'/0'/0/{i}"
-            private_key = addr_ctx.PrivateKey().ToWif() if request.include_private_keys else None
-            addresses.append({
-                "address": str(addr_ctx.PublicKey().ToAddress()),
-                "private_key": private_key,
-                "public_key": public_key_bytes.hex(),
-                "derivation_path": derivation_path
-            })
+            if not request.hardened_addresses:
+                # Generate normal address
+                addr_ctx = change_ctx.AddressIndex(i)
+                public_key_bytes = addr_ctx.PublicKey().RawCompressed().ToBytes()
+                derivation_path = f"m/{purpose}'/0'/0'/0/{i}"
+                private_key = addr_ctx.PrivateKey().ToWif() if request.include_private_keys else None
+                addresses.append({
+                    "address": str(addr_ctx.PublicKey().ToAddress()),
+                    "private_key": private_key,
+                    "public_key": public_key_bytes.hex(),
+                    "derivation_path": derivation_path
+                })
+            else:
+                # Generate hardened address
+                hardened_index = i + 0x80000000  # Add the hardened index offset
+                hardened_ctx = change_ctx.AddressIndex(hardened_index)
+                hardened_derivation_path = f"m/{purpose}'/0'/0'/0/{i}'"
+                hardened_public_key_bytes = hardened_ctx.PublicKey().RawCompressed().ToBytes()
+                hardened_private_key = hardened_ctx.PrivateKey().ToWif() if request.include_private_keys else None
+                addresses.append({
+                    "address": str(hardened_ctx.PublicKey().ToAddress()),
+                    "private_key": hardened_private_key,
+                    "public_key": hardened_public_key_bytes.hex(),
+                    "derivation_path": hardened_derivation_path
+                })
+        
         return {"addresses": addresses}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -296,7 +317,8 @@ async def generate_bip32_addresses(request: AddressRequest = Body(
             "passphrase": "",
             "num_addresses": 1,
             "include_private_keys": False,
-            "derivation_path": "m/0/{index}"
+            "derivation_path": "m/0/{index}",
+            "hardened_addresses": False
             }
         )
 ):
@@ -318,7 +340,8 @@ async def generate_addresses(
             "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
             "passphrase": "",
             "num_addresses": 1,
-            "include_private_keys": False
+            "include_private_keys": False,
+             "hardened_addresses": False
         }
     )
 ):
@@ -340,7 +363,8 @@ async def generate_bip49_addresses(
             "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
             "passphrase": "",
             "num_addresses": 1,
-            "include_private_keys": False
+            "include_private_keys": False,
+            "hardened_addresses": False
         }
     )
 ):
@@ -363,7 +387,8 @@ async def generate_bip84_addresses(
             "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
             "passphrase": "",
             "num_addresses": 1,
-            "include_private_keys": False
+            "include_private_keys": False,
+            "hardened_addresses": False
         }
     )
 ):
