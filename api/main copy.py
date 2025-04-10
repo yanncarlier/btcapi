@@ -14,14 +14,15 @@ import ecdsa
 import base58
 from bip_utils import (
     Bip39SeedGenerator, Bip44, Bip44Coins, Bip44Changes,
-    Bip49, Bip49Coins, Bip84, Bip84Coins, Bip39MnemonicValidator
+    Bip49, Bip49Coins, Bip84, Bip84Coins, Bip86, Bip86Coins,
+    Bip39MnemonicValidator
 )
 from bip32utils import BIP32Key, BIP32_HARDEN
 from mnemonic import Mnemonic
 
 # Constants
-MAX_ADDRESSES = 10  # Maximum number of addresses per request
-RATE_LIMIT = 60     # Maximum requests per IP
+MAX_ADDRESSES = 10  # Maximum number of addresses that can be generated per request
+RATE_LIMIT = 60    # Maximum requests per IP
 TIME_FRAME = timedelta(hours=1)  # Time window for rate limiting
 
 # In-memory storage for rate limiting
@@ -32,7 +33,7 @@ rate_limit_lock = threading.Lock()
 app = FastAPI(
     title="Bitcoin Address Generation API",
     version="1.0.0",
-    description="API for generating Bitcoin mnemonic seeds and various address types (BIP32, BIP44, BIP49, BIP84).",
+    description="API for generating Bitcoin mnemonic seeds and various address types (BIP32, BIP44, BIP49, BIP84, BIP86, BIP85) including BIP141-compatible addresses.",
     servers=[
         {"url": "http://127.0.0.1:8000", "description": "Development server"},
         {"url": "https://btc-tx-gw.vercel.app", "description": "Production environment"},
@@ -40,26 +41,30 @@ app = FastAPI(
     ]
 )
 
+# Replace with your frontend's origin
 origins = [
     "http://127.0.0.1:8000",
     "https://7bitcoin-txcom.vercel.app",
     "https://btc-tx-gw.bitcoin-tx.com"
 ]
 
+# Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=origins,  
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# Middleware to add X-Content-Type-Options header
 @app.middleware("http")
 async def add_x_content_type_options_header(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     return response
 
+# Rate Limiting Middleware
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
     client_ip = request.client.host
@@ -70,11 +75,13 @@ async def rate_limit_middleware(request: Request, call_next):
     window_start = current_time - TIME_FRAME
     
     with rate_limit_lock:
+        # Clean up old timestamps
         if client_ip in request_timestamps:
             request_timestamps[client_ip] = [ts for ts in request_timestamps[client_ip] if ts > window_start]
             if not request_timestamps[client_ip]:
                 del request_timestamps[client_ip]
         
+        # Check rate limit
         if len(request_timestamps.get(client_ip, [])) >= RATE_LIMIT:
             response = JSONResponse(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -88,8 +95,10 @@ async def rate_limit_middleware(request: Request, call_next):
                 response.headers["Retry-After"] = str(int(retry_after))
             return response
         
+        # Calculate remaining requests after this one
         remaining = max(0, RATE_LIMIT - (len(request_timestamps.get(client_ip, [])) + 1))
     
+    # Process the request
     response = await call_next(request)
     
     with rate_limit_lock:
@@ -97,11 +106,12 @@ async def rate_limit_middleware(request: Request, call_next):
             request_timestamps[client_ip] = []
         request_timestamps[client_ip].append(current_time)
     
+    # Set rate limit headers
     response.headers["X-RateLimit-Limit"] = str(RATE_LIMIT)
     response.headers["X-RateLimit-Remaining"] = str(remaining)
     return response
 
-# Pydantic Models
+# Pydantic Models for Request and Response Validation
 class MnemonicResponse(BaseModel):
     BIP39Mnemonic: str
     BIP39Seed: str
@@ -112,7 +122,8 @@ class AddressRequest(BaseModel):
     passphrase: Optional[str] = ""
     num_addresses: Optional[int] = 1
     include_private_keys: bool = False
-    derivation_path: Optional[str] = "m/0/{index}"  # Only used for BIP32
+    derivation_path: Optional[str] = "m/0/{index}"  # Default path with placeholder for index
+    hardened_addresses: bool = False  # New parameter to control hardened address generation
 
 class AddressDetails(BaseModel):
     derivation_path: str
@@ -134,6 +145,7 @@ class BrainWalletResponse(BaseModel):
 
 # Helper Functions
 def generate_brain_wallet(passphrase: str) -> tuple[str, str, str]:
+    """Generate a brain wallet from a passphrase."""
     private_key = hashlib.sha256(passphrase.encode('utf-8')).digest()
     wif_private_key = b'\x80' + private_key
     sha = hashlib.sha256(wif_private_key).digest()
@@ -150,6 +162,7 @@ def generate_brain_wallet(passphrase: str) -> tuple[str, str, str]:
     return wif, address, public_key.hex()
 
 async def _generate_bip32_addresses(request: AddressRequest) -> dict:
+    """Generate BIP32 addresses using bip32utils."""
     try:
         if not Bip39MnemonicValidator().IsValid(request.mnemonic):
             raise ValueError("Invalid mnemonic phrase.")
@@ -159,11 +172,12 @@ async def _generate_bip32_addresses(request: AddressRequest) -> dict:
         root_key = BIP32Key.fromEntropy(seed_bytes)
         addresses = []
         for i in range(request.num_addresses):
+            # Parse the custom derivation path or use the default
             derivation_path = request.derivation_path.replace("{index}", str(i))
             path_parts = derivation_path.split("/")
             key = root_key
             for part in path_parts[1:]:
-                if "'" in part:
+                if "'" in part:  # Hardened key
                     key = key.ChildKey(int(part[:-1]) + BIP32_HARDEN)
                 else:
                     key = key.ChildKey(int(part))
@@ -176,33 +190,70 @@ async def _generate_bip32_addresses(request: AddressRequest) -> dict:
                 "public_key": public_key,
                 "private_key": private_key
             })
+
+            if request.hardened_addresses:
+                # Generate hardened address for the same index
+                hardened_derivation_path = derivation_path[:-len(path_parts[-1])] + f"{path_parts[-1]}'"
+                hardened_key = root_key
+                for part in hardened_derivation_path.split("/")[1:]:
+                    if "'" in part:  # Hardened key
+                        hardened_key = hardened_key.ChildKey(int(part[:-1]) + BIP32_HARDEN)
+                    else:
+                        hardened_key = hardened_key.ChildKey(int(part))
+                hardened_address = hardened_key.Address()
+                hardened_public_key = hardened_key.PublicKey().hex()
+                hardened_private_key = hardened_key.WalletImportFormat() if request.include_private_keys else None
+                addresses.append({
+                    "derivation_path": hardened_derivation_path,
+                    "address": hardened_address,
+                    "public_key": hardened_public_key,
+                    "private_key": hardened_private_key
+                })
         return {"addresses": addresses}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 async def _generate_bip_addresses(request: AddressRequest, bip_class, coin_type, purpose: int) -> dict:
+    """Generic helper to generate BIP addresses (BIP44, BIP49, BIP84, BIP86)."""
     try:
         if not Bip39MnemonicValidator().IsValid(request.mnemonic):
             raise ValueError("Invalid mnemonic phrase.")
         if request.num_addresses < 1 or request.num_addresses > MAX_ADDRESSES:
             raise ValueError(f"Number of addresses must be between 1 and {MAX_ADDRESSES}")
         
+        # Generate seed and initialize BIP context
         seed_bytes = Bip39SeedGenerator(request.mnemonic).Generate(passphrase=request.passphrase)
         bip_ctx = bip_class.FromSeed(seed_bytes, coin_type).Purpose().Coin().Account(0)
         change_ctx = bip_ctx.Change(Bip44Changes.CHAIN_EXT)
         
         addresses = []
         for i in range(request.num_addresses):
-            addr_ctx = change_ctx.AddressIndex(i)
-            public_key_bytes = addr_ctx.PublicKey().RawCompressed().ToBytes()
-            derivation_path = f"m/{purpose}'/0'/0'/0/{i}"
-            private_key = addr_ctx.PrivateKey().ToWif() if request.include_private_keys else None
-            addresses.append({
-                "address": str(addr_ctx.PublicKey().ToAddress()),
-                "private_key": private_key,
-                "public_key": public_key_bytes.hex(),
-                "derivation_path": derivation_path
-            })
+            if not request.hardened_addresses:
+                # Generate normal address
+                addr_ctx = change_ctx.AddressIndex(i)
+                public_key_bytes = addr_ctx.PublicKey().RawCompressed().ToBytes()
+                derivation_path = f"m/{purpose}'/0'/0'/0/{i}"
+                private_key = addr_ctx.PrivateKey().ToWif() if request.include_private_keys else None
+                addresses.append({
+                    "address": str(addr_ctx.PublicKey().ToAddress()),
+                    "private_key": private_key,
+                    "public_key": public_key_bytes.hex(),
+                    "derivation_path": derivation_path
+                })
+            else:
+                # Generate hardened address
+                hardened_index = i + 0x80000000  # Add the hardened index offset
+                hardened_ctx = change_ctx.AddressIndex(hardened_index)
+                hardened_derivation_path = f"m/{purpose}'/0'/0'/0/{i}'"
+                hardened_public_key_bytes = hardened_ctx.PublicKey().RawCompressed().ToBytes()
+                hardened_private_key = hardened_ctx.PrivateKey().ToWif() if request.include_private_keys else None
+                addresses.append({
+                    "address": str(hardened_ctx.PublicKey().ToAddress()),
+                    "private_key": hardened_private_key,
+                    "public_key": hardened_public_key_bytes.hex(),
+                    "derivation_path": hardened_derivation_path
+                })
+        
         return {"addresses": addresses}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -214,6 +265,7 @@ async def _generate_bip_addresses(request: AddressRequest, bip_class, coin_type,
     description="Returns a simple greeting message."
 )
 async def read_root():
+    """Root endpoint returning a simple greeting."""
     return {"Hello": "World"}
 
 @app.get(
@@ -223,6 +275,7 @@ async def read_root():
     description="Generates a new BIP39 mnemonic phrase and its corresponding seed."
 )
 async def generate_mnemonic():
+    """Generate a new BIP39 mnemonic, seed, and BIP32 Root Key."""
     mnemo = Mnemonic("english")
     words = mnemo.generate(128)
     seed = mnemo.to_seed(words)
@@ -237,9 +290,10 @@ async def generate_mnemonic():
     "/generate-brain-wallet",
     response_model=BrainWalletResponse,
     summary="Generate Brain Wallet",
-    description="Generates a Bitcoin address and keys from a passphrase."
+    description="Generates a Bitcoin address and keys from a user-provided passphrase using a brain wallet approach."
 )
 async def generate_brain_wallet_endpoint(request: BrainWalletRequest = Body(...)):
+    """Generate a brain wallet from a passphrase."""
     try:
         wif, addr, pub_key = generate_brain_wallet(request.passphrase)
         return {
@@ -254,19 +308,24 @@ async def generate_brain_wallet_endpoint(request: BrainWalletRequest = Body(...)
     "/generate-bip32-addresses",
     response_model=AddressListResponse,
     summary="Generate BIP32 Addresses",
-    description="Generates BIP32 legacy Bitcoin addresses from a mnemonic phrase with custom derivation paths."
+    description="Generates BIP32 legacy Bitcoin addresses from a mnemonic phrase."
 )
 async def generate_bip32_addresses(request: AddressRequest = Body(
-    ...,
-    example={
-        "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
-        "passphrase": "",
-        "num_addresses": 1,
-        "include_private_keys": False,
-        "derivation_path": "m/0/{index}"
-    }
-)):
+        ...,
+        example={
+            "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+            "passphrase": "",
+            "num_addresses": 1,
+            "include_private_keys": False,
+            "derivation_path": "m/0/{index}",
+            "hardened_addresses": False
+            }
+        )
+):
+    """Generate BIP32 addresses from a mnemonic."""
     return await _generate_bip32_addresses(request)
+    
+
 
 @app.post(
     "/generate-bip44-addresses",
@@ -281,10 +340,14 @@ async def generate_addresses(
             "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
             "passphrase": "",
             "num_addresses": 1,
-            "include_private_keys": False
+            "include_private_keys": False,
+             "hardened_addresses": False
         }
     )
 ):
+    """Generate BIP44 addresses from a mnemonic."""
+    if not request.derivation_path:
+        request.derivation_path = "m/44'/0'/0'/0/{index}"
     return await _generate_bip_addresses(request, Bip44, Bip44Coins.BITCOIN, 44)
 
 @app.post(
@@ -300,10 +363,15 @@ async def generate_bip49_addresses(
             "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
             "passphrase": "",
             "num_addresses": 1,
-            "include_private_keys": False
+            "include_private_keys": False,
+            "hardened_addresses": False
         }
     )
 ):
+    """Generate BIP49 (Wrapped SegWit P2SH-P2WPKH) addresses from a mnemonic."""
+    # Set default derivation path if not provided
+    if not request.derivation_path:
+        request.derivation_path = "m/49'/0'/0'/0/{index}"
     return await _generate_bip_addresses(request, Bip49, Bip49Coins.BITCOIN, 49)
 
 @app.post(
@@ -319,12 +387,18 @@ async def generate_bip84_addresses(
             "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
             "passphrase": "",
             "num_addresses": 1,
-            "include_private_keys": False
+            "include_private_keys": False,
+            "hardened_addresses": False
         }
     )
 ):
+    """Generate BIP84 (Native SegWit P2WPKH) addresses from a mnemonic."""
+    # Set default derivation path if not provided
+    if not request.derivation_path:
+        request.derivation_path = "m/84'/0'/0'/0/{index}"
     return await _generate_bip_addresses(request, Bip84, Bip84Coins.BITCOIN, 84)
 
+# Run the application
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
