@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException, Body, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+
 from pydantic import BaseModel
 import ecdsa
 import base58
@@ -117,9 +118,7 @@ class AddressDetails(BaseModel):
     derivation_path: str
     address: str
     public_key: str
-    extended_private_key: Optional[str] = None
     private_key: Optional[str] = None
-    wif: Optional[str] = None
 
 class AddressListResponse(BaseModel):
     addresses: list[AddressDetails]
@@ -170,21 +169,12 @@ async def _generate_bip32_addresses(request: AddressRequest) -> dict:
                     key = key.ChildKey(int(part))
             address = key.Address()
             public_key = key.PublicKey().hex()
-            if request.include_private_keys:
-                extended_private_key = key.ExtendedKey()
-                private_key = key.PrivateKey().hex()
-                wif = key.WalletImportFormat()
-            else:
-                extended_private_key = None
-                private_key = None
-                wif = None
+            private_key = key.WalletImportFormat() if request.include_private_keys else None
             addresses.append({
                 "derivation_path": derivation_path,
                 "address": address,
                 "public_key": public_key,
-                "extended_private_key": extended_private_key,
-                "private_key": private_key,
-                "wif": wif
+                "private_key": private_key
             })
         return {"addresses": addresses}
     except Exception as e:
@@ -206,21 +196,12 @@ async def _generate_bip_addresses(request: AddressRequest, bip_class, coin_type,
             addr_ctx = change_ctx.AddressIndex(i)
             public_key_bytes = addr_ctx.PublicKey().RawCompressed().ToBytes()
             derivation_path = f"m/{purpose}'/0'/0'/0/{i}"
-            if request.include_private_keys:
-                extended_private_key = addr_ctx.PrivateKey().ToExtended()
-                private_key = addr_ctx.PrivateKey().Raw().ToHex()
-                wif = addr_ctx.PrivateKey().ToWif()
-            else:
-                extended_private_key = None
-                private_key = None
-                wif = None
+            private_key = addr_ctx.PrivateKey().ToWif() if request.include_private_keys else None
             addresses.append({
-                "derivation_path": derivation_path,
                 "address": str(addr_ctx.PublicKey().ToAddress()),
-                "public_key": public_key_bytes.hex(),
-                "extended_private_key": extended_private_key,
                 "private_key": private_key,
-                "wif": wif
+                "public_key": public_key_bytes.hex(),
+                "derivation_path": derivation_path
             })
         return {"addresses": addresses}
     except Exception as e:
@@ -282,7 +263,7 @@ async def generate_bip32_addresses(request: AddressRequest = Body(
         "passphrase": "",
         "num_addresses": 1,
         "include_private_keys": False,
-        "derivation_path": "m/0'/0'/{index}"
+        "derivation_path": "m/0'/0/{index}"
     }
 )):
     return await _generate_bip32_addresses(request)
@@ -293,7 +274,7 @@ async def generate_bip32_addresses(request: AddressRequest = Body(
     summary="Generate BIP44 Addresses",
     description="Generates BIP44 legacy Bitcoin addresses (P2PKH) from a mnemonic phrase."
 )
-async def generate_bip44_addresses(
+async def generate_addresses(
     request: AddressRequest = Body(
         ...,
         example={
