@@ -8,12 +8,14 @@ from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException, Body, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+
 from pydantic import BaseModel
 import ecdsa
 import base58
 from bip_utils import (
     Bip39SeedGenerator, Bip44, Bip44Coins, Bip44Changes,
-    Bip49, Bip49Coins, Bip84, Bip84Coins, Bip39MnemonicValidator
+    Bip49, Bip49Coins, Bip84, Bip84Coins, Bip39MnemonicValidator,
+    Bip86, Bip86Coins  # Added for BIP86 support
 )
 from bip32utils import BIP32Key, BIP32_HARDEN
 from mnemonic import Mnemonic
@@ -31,7 +33,7 @@ rate_limit_lock = threading.Lock()
 app = FastAPI(
     title="Bitcoin Address Generation API",
     version="1.0.0",
-    description="API for generating Bitcoin mnemonic seeds and various address types (BIP32, BIP44, BIP49, BIP84).",
+    description="API for generating Bitcoin mnemonic seeds and various address types (BIP32, BIP44, BIP49, BIP84, BIP86).",
     servers=[
         {"url": "http://127.0.0.1:8000", "description": "Development server"},
         {"url": "https://btc-tx-gw.vercel.app", "description": "Production environment"},
@@ -282,7 +284,7 @@ async def generate_bip32_addresses(request: AddressRequest = Body(
         "passphrase": "",
         "num_addresses": 1,
         "include_private_keys": False,
-        "derivation_path": "m/0'/0'/{index}"
+        "derivation_path": "m/0'/0/{index}"
     }
 )):
     return await _generate_bip32_addresses(request)
@@ -343,6 +345,25 @@ async def generate_bip84_addresses(
     )
 ):
     return await _generate_bip_addresses(request, Bip84, Bip84Coins.BITCOIN, 84)
+
+@app.post(
+    "/generate-bip86-addresses",
+    response_model=AddressListResponse,
+    summary="Generate BIP86 Addresses",
+    description="Generates BIP86 Taproot (P2TR) Bitcoin addresses from a mnemonic phrase."
+)
+async def generate_bip86_addresses(
+    request: AddressRequest = Body(
+        ...,
+        example={
+            "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+            "passphrase": "",
+            "num_addresses": 1,
+            "include_private_keys": False
+        }
+    )
+):
+    return await _generate_bip_addresses(request, Bip86, Bip86Coins.BITCOIN, 86)
 
 if __name__ == "__main__":
     import uvicorn
