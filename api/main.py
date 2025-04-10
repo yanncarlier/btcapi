@@ -43,7 +43,7 @@ app = FastAPI(
 
 # Replace with your frontend's origin
 origins = [
-    "http://localhost:3000",
+    "http://127.0.0.1:8000",
     "https://7bitcoin-txcom.vercel.app",
     "https://btc-tx-gw.bitcoin-tx.com"
 ]
