@@ -263,7 +263,7 @@ async def generate_bip32_addresses(request: AddressRequest = Body(
         "passphrase": "",
         "num_addresses": 1,
         "include_private_keys": False,
-        "derivation_path": "m/0/{index}"
+        "derivation_path": "m/0'/0/{index}"
     }
 )):
     return await _generate_bip32_addresses(request)
