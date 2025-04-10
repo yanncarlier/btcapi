@@ -189,6 +189,24 @@ async def _generate_bip32_addresses(request: AddressRequest) -> dict:
                 "public_key": public_key,
                 "private_key": private_key
             })
+
+            # Generate hardened address for the same index
+            hardened_derivation_path = derivation_path[:-len(path_parts[-1])] + f"{path_parts[-1]}'"
+            hardened_key = root_key
+            for part in hardened_derivation_path.split("/")[1:]:
+                if "'" in part:  # Hardened key
+                    hardened_key = hardened_key.ChildKey(int(part[:-1]) + BIP32_HARDEN)
+                else:
+                    hardened_key = hardened_key.ChildKey(int(part))
+            hardened_address = hardened_key.Address()
+            hardened_public_key = hardened_key.PublicKey().hex()
+            hardened_private_key = hardened_key.WalletImportFormat() if request.include_private_keys else None
+            addresses.append({
+                "derivation_path": hardened_derivation_path,
+                "address": hardened_address,
+                "public_key": hardened_public_key,
+                "private_key": hardened_private_key
+            })
         return {"addresses": addresses}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
