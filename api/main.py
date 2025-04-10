@@ -274,7 +274,7 @@ async def generate_brain_wallet_endpoint(request: BrainWalletRequest = Body(...)
 @app.post(
     "/generate-bip32-addresses",
     response_model=AddressListResponse,
-    summary="Generate BIP32 Addresses",
+    summary="Generate BIP32 Addresses (custom derivation paths)",
     description="Generates BIP32 legacy Bitcoin addresses from a mnemonic phrase with custom derivation paths."
 )
 async def generate_bip32_addresses(request: AddressRequest = Body(
