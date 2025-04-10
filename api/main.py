@@ -122,6 +122,7 @@ class AddressRequest(BaseModel):
     passphrase: Optional[str] = ""
     num_addresses: Optional[int] = 1
     include_private_keys: bool = False
+    derivation_path: Optional[str] = "m/0/{index}"  # Default path with placeholder for index
 
 class AddressDetails(BaseModel):
     derivation_path: str
@@ -140,17 +141,6 @@ class BrainWalletResponse(BaseModel):
     bitcoin_address: str
     public_key: str
     wif_private_key: Optional[str] = None
-
-class BIP85Request(BaseModel):
-    mnemonic: str
-    passphrase: Optional[str] = ""
-    app_index: int = 39
-    word_count: int = 12
-    index: int = 0
-
-class BIP85Response(BaseModel):
-    derivation_path: str
-    child_mnemonic: str
 
 # Helper Functions
 def generate_brain_wallet(passphrase: str) -> tuple[str, str, str]:
@@ -181,16 +171,18 @@ async def _generate_bip32_addresses(request: AddressRequest) -> dict:
         root_key = BIP32Key.fromEntropy(seed_bytes)
         addresses = []
         for i in range(request.num_addresses):
-            address_key = (root_key
-                           .ChildKey(32 + BIP32_HARDEN)
-                           .ChildKey(0 + BIP32_HARDEN)
-                           .ChildKey(0 + BIP32_HARDEN)
-                           .ChildKey(0)
-                           .ChildKey(i))
-            derivation_path = f"m/32'/0'/0'/0/{i}"
-            address = address_key.Address()
-            public_key = address_key.PublicKey().hex()
-            private_key = address_key.WalletImportFormat() if request.include_private_keys else None
+            # Parse the custom derivation path or use the default
+            derivation_path = request.derivation_path.replace("{index}", str(i))
+            path_parts = derivation_path.split("/")
+            key = root_key
+            for part in path_parts[1:]:
+                if "'" in part:  # Hardened key
+                    key = key.ChildKey(int(part[:-1]) + BIP32_HARDEN)
+                else:
+                    key = key.ChildKey(int(part))
+            address = key.Address()
+            public_key = key.PublicKey().hex()
+            private_key = key.WalletImportFormat() if request.include_private_keys else None
             addresses.append({
                 "derivation_path": derivation_path,
                 "address": address,
@@ -279,9 +271,21 @@ async def generate_brain_wallet_endpoint(request: BrainWalletRequest = Body(...)
     summary="Generate BIP32 Addresses",
     description="Generates BIP32 legacy Bitcoin addresses from a mnemonic phrase."
 )
-async def generate_bip32_addresses(request: AddressRequest = Body(...)):
+async def generate_bip32_addresses(request: AddressRequest = Body(
+        ...,
+        example={
+            "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+            "passphrase": "",
+            "num_addresses": 1,
+            "include_private_keys": False,
+            "derivation_path": "m/0/{index}"
+            }
+        )
+):
     """Generate BIP32 addresses from a mnemonic."""
     return await _generate_bip32_addresses(request)
+    
+
 
 @app.post(
     "/generate-bip44-addresses",
@@ -289,8 +293,20 @@ async def generate_bip32_addresses(request: AddressRequest = Body(...)):
     summary="Generate BIP44 Addresses",
     description="Generates BIP44 legacy Bitcoin addresses (P2PKH) from a mnemonic phrase."
 )
-async def generate_addresses(request: AddressRequest = Body(...)):
+async def generate_addresses(
+    request: AddressRequest = Body(
+        ...,
+        example={
+            "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+            "passphrase": "",
+            "num_addresses": 1,
+            "include_private_keys": False
+        }
+    )
+):
     """Generate BIP44 addresses from a mnemonic."""
+    if not request.derivation_path:
+        request.derivation_path = "m/44'/0'/0'/0/{index}"
     return await _generate_bip_addresses(request, Bip44, Bip44Coins.BITCOIN, 44)
 
 @app.post(
@@ -299,8 +315,21 @@ async def generate_addresses(request: AddressRequest = Body(...)):
     summary="Generate BIP49 Addresses",
     description="Generates BIP49 Wrapped SegWit (P2SH-P2WPKH) Bitcoin addresses from a mnemonic phrase."
 )
-async def generate_bip49_addresses(request: AddressRequest = Body(...)):
+async def generate_bip49_addresses(
+    request: AddressRequest = Body(
+        ...,
+        example={
+            "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+            "passphrase": "",
+            "num_addresses": 1,
+            "include_private_keys": False
+        }
+    )
+):
     """Generate BIP49 (Wrapped SegWit P2SH-P2WPKH) addresses from a mnemonic."""
+    # Set default derivation path if not provided
+    if not request.derivation_path:
+        request.derivation_path = "m/49'/0'/0'/0/{index}"
     return await _generate_bip_addresses(request, Bip49, Bip49Coins.BITCOIN, 49)
 
 @app.post(
@@ -309,80 +338,22 @@ async def generate_bip49_addresses(request: AddressRequest = Body(...)):
     summary="Generate BIP84 Addresses",
     description="Generates BIP84 Native SegWit (P2WPKH) Bitcoin addresses from a mnemonic phrase."
 )
-async def generate_bip84_addresses(request: AddressRequest = Body(...)):
-    """Generate BIP84 (Native SegWit P2WPKH) addresses from a mnemonic."""
-    return await _generate_bip_addresses(request, Bip84, Bip84Coins.BITCOIN, 84)
-
-@app.post(
-    "/generate-bip86-addresses",
-    response_model=AddressListResponse,
-    summary="Generate BIP86 Addresses",
-    description="Generates BIP86 Taproot (P2TR) Bitcoin addresses from a mnemonic phrase."
-)
-async def generate_bip86_addresses(request: AddressRequest = Body(...)):
-    """Generate BIP86 (Taproot) addresses from a mnemonic."""
-    return await _generate_bip_addresses(request, Bip86, Bip86Coins.BITCOIN, 86)
-
-@app.post(
-    "/generate-bip141-wrapped-segwit-via-bip49",
-    response_model=AddressListResponse,
-    summary="Generate BIP141 Wrapped SegWit via BIP49",
-    description="Generates BIP141-compatible Wrapped SegWit (P2SH-P2WPKH) Bitcoin addresses using BIP49 derivation."
-)
-async def generate_bip141_wrapped_segwit_via_bip49(request: AddressRequest = Body(...)):
-    """Generate BIP141-compatible Wrapped SegWit (P2SH-P2WPKH) addresses using BIP49."""
-    return await _generate_bip_addresses(request, Bip49, Bip49Coins.BITCOIN, 49)
-
-@app.post(
-    "/generate-bip141-native-segwit-via-bip84",
-    response_model=AddressListResponse,
-    summary="Generate BIP141 Native SegWit via BIP84",
-    description="Generates BIP141-compatible Native SegWit (P2WPKH) Bitcoin addresses using BIP84 derivation."
-)
-async def generate_bip141_native_segwit_via_bip84(request: AddressRequest = Body(...)):
-    """Generate BIP141-compatible Native SegWit (P2WPKH) addresses using BIP84."""
-    return await _generate_bip_addresses(request, Bip84, Bip84Coins.BITCOIN, 84)
-
-@app.post(
-    "/generate-bip85-child-mnemonic",
-    response_model=BIP85Response,
-    summary="Generate BIP85 Child Mnemonic",
-    description="Generates a BIP85 child mnemonic from a master mnemonic for deterministic derivation of additional mnemonics."
-)
-async def generate_bip85_child_mnemonic(request: BIP85Request = Body(...)):
-    """Generate a BIP85 child mnemonic from a master mnemonic."""
-    try:
-        if not Bip39MnemonicValidator().IsValid(request.mnemonic):
-            raise ValueError("Invalid mnemonic phrase.")
-        
-        mnemo = Mnemonic("english")
-        valid_word_counts = [12, 15, 18, 21, 24]
-        if request.word_count not in valid_word_counts:
-            raise ValueError("Word count must be 12, 15, 18, 21, or 24.")
-
-        word_count_to_entropy_len = {12: 16, 15: 20, 18: 24, 21: 28, 24: 32}
-        entropy_len = word_count_to_entropy_len[request.word_count]
-
-        seed = mnemo.to_seed(request.mnemonic, passphrase=request.passphrase)
-        master_key = BIP32Key.fromEntropy(seed)
-
-        child_key = (master_key
-                     .ChildKey(83696968 + BIP32_HARDEN)
-                     .ChildKey(request.app_index + BIP32_HARDEN)
-                     .ChildKey(request.index + BIP32_HARDEN))
-
-        child_entropy = child_key.PrivateKey()[:entropy_len]
-        child_mnemonic = mnemo.to_mnemonic(child_entropy)
-
-        derivation_path = f"m/83696968'/{request.app_index}'/{request.index}'"
-        return {
-            "derivation_path": derivation_path,
-            "child_mnemonic": child_mnemonic
+async def generate_bip84_addresses(
+    request: AddressRequest = Body(
+        ...,
+        example={
+            "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+            "passphrase": "",
+            "num_addresses": 1,
+            "include_private_keys": False
         }
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="An unexpected error occurred.")
+    )
+):
+    """Generate BIP84 (Native SegWit P2WPKH) addresses from a mnemonic."""
+    # Set default derivation path if not provided
+    if not request.derivation_path:
+        request.derivation_path = "m/84'/0'/0'/0/{index}"
+    return await _generate_bip_addresses(request, Bip84, Bip84Coins.BITCOIN, 84)
 
 # Run the application
 if __name__ == "__main__":
