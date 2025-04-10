@@ -152,15 +152,6 @@ class BIP85Response(BaseModel):
     derivation_path: str
     child_mnemonic: str
 
-class AllBipAddressesResponse(BaseModel):
-    BIP32: list[AddressDetails]
-    BIP44: list[AddressDetails]
-    BIP49: list[AddressDetails]
-    BIP84: list[AddressDetails]
-    BIP86: list[AddressDetails]
-    BIP141_Wrapped_SegWit_via_BIP49: list[AddressDetails]
-    BIP141_Native_SegWit_via_BIP84: list[AddressDetails]
-
 # Helper Functions
 def generate_brain_wallet(passphrase: str) -> tuple[str, str, str]:
     """Generate a brain wallet from a passphrase."""
@@ -392,38 +383,6 @@ async def generate_bip85_child_mnemonic(request: BIP85Request = Body(...)):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail="An unexpected error occurred.")
-
-@app.post(
-    "/generate-all-bip-addresses",
-    response_model=AllBipAddressesResponse,
-    summary="Generate All BIP Addresses",
-    description="Generates addresses for all supported BIP types (BIP32, BIP44, BIP49, BIP84, BIP86) from a mnemonic phrase."
-)
-async def generate_all_bip_addresses(request: AddressRequest = Body(...)):
-    """Generate addresses for all supported BIP types from a mnemonic."""
-    if not Bip39MnemonicValidator().IsValid(request.mnemonic):
-        raise HTTPException(status_code=400, detail="Invalid mnemonic phrase.")
-    
-    if request.num_addresses < 1 or request.num_addresses > MAX_ADDRESSES:
-        raise HTTPException(status_code=400, detail=f"Number of addresses must be between 1 and {MAX_ADDRESSES}")
-
-    bip32_addresses = (await _generate_bip32_addresses(request))["addresses"]
-    bip44_addresses = (await _generate_bip_addresses(request, Bip44, Bip44Coins.BITCOIN, 44))["addresses"]
-    bip49_addresses = (await _generate_bip_addresses(request, Bip49, Bip49Coins.BITCOIN, 49))["addresses"]
-    bip84_addresses = (await _generate_bip_addresses(request, Bip84, Bip84Coins.BITCOIN, 84))["addresses"]
-    bip86_addresses = (await _generate_bip_addresses(request, Bip86, Bip86Coins.BITCOIN, 86))["addresses"]
-    bip141_wrapped_segwit = bip49_addresses
-    bip141_native_segwit = bip84_addresses
-
-    return {
-        "BIP32": bip32_addresses,
-        "BIP44": bip44_addresses,
-        "BIP49": bip49_addresses,
-        "BIP84": bip84_addresses,
-        "BIP86": bip86_addresses,
-        "BIP141_Wrapped_SegWit_via_BIP49": bip141_wrapped_segwit,
-        "BIP141_Native_SegWit_via_BIP84": bip141_native_segwit
-    }
 
 # Run the application
 if __name__ == "__main__":
