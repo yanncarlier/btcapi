@@ -1,29 +1,31 @@
 # Bitcoin Address Generation API
 
-A FastAPI-based RESTful API for generating Bitcoin mnemonic seeds and various types of Bitcoin addresses (BIP32, BIP44, BIP49, BIP84) along with brain wallet functionality.
+A FastAPI-based RESTful API for generating Bitcoin mnemonic seeds and various address types including BIP32, BIP44, BIP49, BIP84, and BIP86.
 
 ## Features
 
 - Generate BIP39 mnemonic phrases and seeds
-- Generate BIP32 legacy addresses with custom derivation paths
-- Generate BIP44 legacy (P2PKH) addresses
-- Generate BIP49 Wrapped SegWit (P2SH-P2WPKH) addresses
-- Generate BIP84 Native SegWit (P2WPKH) addresses
 - Create brain wallets from passphrases
-- Rate limiting and CORS support
-- Optional private key inclusion
-- Detailed API documentation via OpenAPI
+- Generate Bitcoin addresses with different derivation schemes:
+  - BIP32 (Custom derivation paths)
+  - BIP44 (Legacy P2PKH)
+  - BIP49 (Wrapped SegWit P2SH-P2WPKH)
+  - BIP84 (Native SegWit P2WPKH)
+  - BIP86 (Taproot P2TR)
+- Rate limiting per IP address
+- CORS support
+- Detailed API documentation via OpenAPI/Swagger
 
 ## Prerequisites
 
 - Python 3.8+
-- Required packages (listed in requirements.txt)
+- Required packages (see `requirements.txt`)
 
 ## Installation
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/username/bitcoin-address-api.git
+git clone <repository-url>
 cd bitcoin-address-api
 ```
 
@@ -44,22 +46,9 @@ bash
 pip install -r requirements.txt
 ```
 
-Requirements.txt
-
-```text
-fastapi>=0.95.0
-uvicorn>=0.20.0
-pydantic>=1.10.0
-ecdsa>=0.18.0
-base58>=2.1.1
-bip-utils>=2.7.0
-bip32utils>=0.3.post4
-mnemonic>=0.20
-```
-
 Usage
 
-Run the API server:
+1. Run the development server:
 
 bash
 
@@ -69,43 +58,31 @@ python main.py
 uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-The API will be available at:
+1. Access the API:
 
-- Development: http://127.0.0.1:8000
-- Production: https://btc-tx-gw.vercel.app or https://btc-tx-gw.bitcoin-tx.com
-
-Access the interactive API documentation at /docs endpoint (e.g., http://127.0.0.1:8000/docs)
+- Development server: http://127.0.0.1:8000
+- API documentation: http://127.0.0.1:8000/docs
+- Redoc documentation: http://127.0.0.1:8000/redoc
 
 API Endpoints
 
-1. Root
-   - GET /
-   - Returns a simple greeting message
-2. Generate Mnemonic
-   - GET /generate-mnemonic
-   - Returns a new BIP39 mnemonic, seed, and BIP32 root key
-3. Generate Brain Wallet
-   - POST /generate-brain-wallet
-   - Creates a Bitcoin address from a passphrase
-4. Generate BIP32 Addresses
-   - POST /generate-bip32-addresses
-   - Generates legacy addresses with custom derivation paths
-5. Generate BIP44 Addresses
-   - POST /generate-bip44-addresses
-   - Generates legacy P2PKH addresses
-6. Generate BIP49 Addresses
-   - POST /generate-bip49-addresses
-   - Generates Wrapped SegWit P2SH-P2WPKH addresses
-7. Generate BIP84 Addresses
-   - POST /generate-bip84-addresses
-   - Generates Native SegWit P2WPKH addresses
+| Endpoint                  | Method | Description                                |
+| ------------------------- | ------ | ------------------------------------------ |
+| /                         | GET    | Root endpoint returning a greeting         |
+| /generate-mnemonic        | GET    | Generate a new BIP39 mnemonic and seed     |
+| /generate-brain-wallet    | POST   | Generate a brain wallet from a passphrase  |
+| /generate-bip32-addresses | POST   | Generate BIP32 addresses with custom paths |
+| /generate-bip44-addresses | POST   | Generate BIP44 legacy addresses            |
+| /generate-bip49-addresses | POST   | Generate BIP49 wrapped SegWit addresses    |
+| /generate-bip84-addresses | POST   | Generate BIP84 native SegWit addresses     |
+| /generate-bip86-addresses | POST   | Generate BIP86 Taproot addresses           |
 
 Configuration
 
 - MAX_ADDRESSES: Maximum number of addresses per request (default: 10)
 - RATE_LIMIT: Maximum requests per IP (default: 60)
 - TIME_FRAME: Rate limiting window (default: 1 hour)
-- origins: List of allowed CORS origins
+- origins: Allowed CORS origins
 
 Security Features
 
@@ -113,14 +90,24 @@ Security Features
 - CORS middleware
 - X-Content-Type-Options header
 - Input validation
-- Error handling
+- Optional private key inclusion
 
-Example Request
+Request Examples
+
+Generate Mnemonic
 
 bash
 
 ```bash
-curl -X POST "http://127.0.0.1:8000/generate-bip44-addresses" \
+curl http://127.0.0.1:8000/generate-mnemonic
+```
+
+Generate BIP84 Addresses
+
+bash
+
+```bash
+curl -X POST http://127.0.0.1:8000/generate-bip84-addresses \
 -H "Content-Type: application/json" \
 -d '{
     "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
@@ -132,52 +119,64 @@ curl -X POST "http://127.0.0.1:8000/generate-bip44-addresses" \
 
 Response Format
 
+Successful responses return JSON with address details:
+
 json
 
 ```json
 {
     "addresses": [
         {
-            "derivation_path": "m/44'/0'/0'/0/0",
-            "address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+            "derivation_path": "m/84'/0'/0'/0/0",
+            "address": "bc1q...",
             "public_key": "02...",
-            "private_key": null
+            "extended_private_key": null,
+            "private_key": null,
+            "wif": null
         }
     ]
 }
 ```
 
-Rate Limiting
+Dependencies
 
-- Limit: 60 requests per IP per hour
-- Headers included in responses:
-  - X-RateLimit-Limit
-  - X-RateLimit-Remaining
-  - Retry-After (when limit exceeded)
+- fastapi
+- pydantic
+- ecdsa
+- base58
+- bip-utils
+- bip32utils
+- mnemonic
+- uvicorn
 
-Contributing
+Development
+
+To contribute:
 
 1. Fork the repository
-2. Create your feature branch (git checkout -b feature/amazing-feature)
-3. Commit your changes (git commit -m 'Add some amazing feature')
-4. Push to the branch (git push origin feature/amazing-feature)
-5. Open a Pull Request
+2. Create a feature branch
+3. Submit a pull request
 
 License
 
-MIT License - see LICENSE file for details
+MIT License (LICENSE)
 
 Disclaimer
 
-This is for educational purposes only. Use at your own risk, especially when generating private keys in a production environment. Always follow security best practices when handling cryptocurrency keys.
+This software is for educational purposes only. Use at your own risk, especially when handling real cryptocurrency funds. Always verify generated addresses and keep private keys secure.
 
 ```text
-You can save this content as `README.md` in your project directory. This single file contains all the sections from the previous response, properly formatted with Markdown syntax. To use it:
+To use this README:
 
-1. Create a new file named `README.md`
-2. Copy and paste this entire content
-3. Save the file
-4. Modify any project-specific details (repository URL, username, etc.) as needed
+1. Create a `README.md` file in your project root
+2. Copy and paste the content above
+3. Customize as needed:
+   - Update the repository URL
+   - Add specific license information
+   - Modify installation instructions if different
+   - Add any additional sections specific to your deployment
 
-The file will be properly rendered when viewed on GitHub or other Markdown-supporting platforms.
+You might also want to create a `requirements.txt` file with:
 ```
+
+fastapi pydantic ecdsa base58 bip-utils bip32utils mnemonic uvicorn
