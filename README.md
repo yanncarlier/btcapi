@@ -1,103 +1,121 @@
-------
+# Bitcoin Address Generation API
 
-# Bitcoin Address Generation API Gateway
-
-This is a FastAPI-based RESTful API for generating Bitcoin mnemonic seeds and various address types, including BIP32, BIP44, BIP49, BIP84, BIP86, BIP85, and BIP141-compatible addresses. It also supports generating brain wallets from passphrases. The API is designed for developers and enthusiasts who need to generate Bitcoin addresses programmatically.
+A FastAPI-based RESTful API for generating Bitcoin mnemonic seeds and various types of Bitcoin addresses (BIP32, BIP44, BIP49, BIP84) along with brain wallet functionality.
 
 ## Features
 
-- Generate BIP39 mnemonic phrases and seeds.
-- Generate Bitcoin addresses for multiple BIP standards:
-  - **BIP32**: Legacy HD wallet addresses.
-  - **BIP44**: Legacy P2PKH addresses.
-  - **BIP49**: Wrapped SegWit (P2SH-P2WPKH) addresses.
-  - **BIP84**: Native SegWit (P2WPKH) addresses.
-  - **BIP86**: Taproot (P2TR) addresses.
-  - **BIP141**: Wrapped and Native SegWit addresses via BIP49 and BIP84.
-- Generate BIP85 child mnemonics for deterministic derivation.
-- Generate brain wallets from user-provided passphrases.
-- Option to include or exclude private keys in responses (defaults to false for security).
-- Interactive API documentation via Swagger UI (/docs) and ReDoc (/redoc).
+- Generate BIP39 mnemonic phrases and seeds
+- Generate BIP32 legacy addresses with custom derivation paths
+- Generate BIP44 legacy (P2PKH) addresses
+- Generate BIP49 Wrapped SegWit (P2SH-P2WPKH) addresses
+- Generate BIP84 Native SegWit (P2WPKH) addresses
+- Create brain wallets from passphrases
+- Rate limiting and CORS support
+- Optional private key inclusion
+- Detailed API documentation via OpenAPI
 
 ## Prerequisites
 
 - Python 3.8+
-- A Unix-like environment (Linux, macOS) or Windows with compatible tools.
+- Required packages (listed in requirements.txt)
 
 ## Installation
 
-1. **Clone the Repository**:
+1. Clone the repository:
+```bash
+git clone https://github.com/username/bitcoin-address-api.git
+cd bitcoin-address-api
+```
 
-   bash
-
-   ```bash
-   git clone https://github.com/yanncarlier/btc_tx_gw.git
-   cd btc_tx_gw
-   ```
-
-2. **Create a Virtual Environment** (optional but recommended):
-
-   bash
-
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-3. **Install Dependencies**: Install the required Python packages using pip:
-
-   bash
-
-   ```bash
-   pip install fastapi uvicorn ecdsa base58 bip-utils bip32utils mnemonic
-   ```
-
-4. **Run the Application**: Start the FastAPI server locally:
-
-   bash
-
-   ```bash
-   python main.py
-   ```
-
-   The API will be available at: http://127.0.0.1:8000  
-
-   
-
-## Usage
-
-## Running the API
-
-- **Local Development**: Use the command above to run on http://127.0.0.1:8000
-- **Production**: Deploy to a server (e.g., Vercel) https://btc-tx-gw.vercel.app
-
-## Accessing Documentation
-
-- **Swagger UI**: Visit http://127.0.0.1:8000/docs for an interactive API explorer.
-- **ReDoc**: Visit http://127.0.0.1:8000/redoc for a detailed API reference.
-
-## Example Requests
-
-1. Generate a BIP39 Mnemonic
+1. Create a virtual environment:
 
 bash
 
 ```bash
-curl -X GET "http://127.0.0.1:8000/generate-mnemonic"
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
-**Response**:
+1. Install dependencies:
 
-json
+bash
 
-```json
-{
-  "BIP39Mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
-  "BIP39Seed": "5eb00bbddcf069084889a8ab9155568165f5c453ccb85e70811aaed6f6da5fc19a5ac40b389cd370d086206dec8aa6c43daea6690f20ad3d8d48b2d2ce9e38e4"
-}
+```bash
+pip install -r requirements.txt
 ```
 
-2. Generate BIP44 Addresses
+Requirements.txt
+
+```text
+fastapi>=0.95.0
+uvicorn>=0.20.0
+pydantic>=1.10.0
+ecdsa>=0.18.0
+base58>=2.1.1
+bip-utils>=2.7.0
+bip32utils>=0.3.post4
+mnemonic>=0.20
+```
+
+Usage
+
+Run the API server:
+
+bash
+
+```bash
+python main.py
+# or
+uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+The API will be available at:
+
+- Development: http://127.0.0.1:8000
+- Production: https://btc-tx-gw.vercel.app or https://btc-tx-gw.bitcoin-tx.com
+
+Access the interactive API documentation at /docs endpoint (e.g., http://127.0.0.1:8000/docs)
+
+API Endpoints
+
+1. Root
+   - GET /
+   - Returns a simple greeting message
+2. Generate Mnemonic
+   - GET /generate-mnemonic
+   - Returns a new BIP39 mnemonic, seed, and BIP32 root key
+3. Generate Brain Wallet
+   - POST /generate-brain-wallet
+   - Creates a Bitcoin address from a passphrase
+4. Generate BIP32 Addresses
+   - POST /generate-bip32-addresses
+   - Generates legacy addresses with custom derivation paths
+5. Generate BIP44 Addresses
+   - POST /generate-bip44-addresses
+   - Generates legacy P2PKH addresses
+6. Generate BIP49 Addresses
+   - POST /generate-bip49-addresses
+   - Generates Wrapped SegWit P2SH-P2WPKH addresses
+7. Generate BIP84 Addresses
+   - POST /generate-bip84-addresses
+   - Generates Native SegWit P2WPKH addresses
+
+Configuration
+
+- MAX_ADDRESSES: Maximum number of addresses per request (default: 10)
+- RATE_LIMIT: Maximum requests per IP (default: 60)
+- TIME_FRAME: Rate limiting window (default: 1 hour)
+- origins: List of allowed CORS origins
+
+Security Features
+
+- Rate limiting per IP address
+- CORS middleware
+- X-Content-Type-Options header
+- Input validation
+- Error handling
+
+Example Request
 
 bash
 
@@ -105,132 +123,61 @@ bash
 curl -X POST "http://127.0.0.1:8000/generate-bip44-addresses" \
 -H "Content-Type: application/json" \
 -d '{
-  "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
-  "passphrase": "",
-  "num_addresses": 1,
-  "include_private_keys": true
+    "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+    "passphrase": "",
+    "num_addresses": 1,
+    "include_private_keys": false
 }'
 ```
 
-**Response**:
+Response Format
 
 json
 
 ```json
 {
-  "addresses": [
-    {
-      "derivation_path": "m/44'/0'/0'/0/0",
-      "address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
-      "public_key": "02...",
-      "private_key": "L1..."
-    }
-  ]
+    "addresses": [
+        {
+            "derivation_path": "m/44'/0'/0'/0/0",
+            "address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+            "public_key": "02...",
+            "private_key": null
+        }
+    ]
 }
 ```
 
-3. Generate All BIP Addresses
+Rate Limiting
 
-bash
+- Limit: 60 requests per IP per hour
+- Headers included in responses:
+  - X-RateLimit-Limit
+  - X-RateLimit-Remaining
+  - Retry-After (when limit exceeded)
 
-```bash
-curl -X POST "http://127.0.0.1:8000/generate-all-bip-addresses" \
--H "Content-Type: application/json" \
--d '{
-  "mnemonic": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
-  "num_addresses": 1
-}'
+Contributing
+
+1. Fork the repository
+2. Create your feature branch (git checkout -b feature/amazing-feature)
+3. Commit your changes (git commit -m 'Add some amazing feature')
+4. Push to the branch (git push origin feature/amazing-feature)
+5. Open a Pull Request
+
+License
+
+MIT License - see LICENSE file for details
+
+Disclaimer
+
+This is for educational purposes only. Use at your own risk, especially when generating private keys in a production environment. Always follow security best practices when handling cryptocurrency keys.
+
+```text
+You can save this content as `README.md` in your project directory. This single file contains all the sections from the previous response, properly formatted with Markdown syntax. To use it:
+
+1. Create a new file named `README.md`
+2. Copy and paste this entire content
+3. Save the file
+4. Modify any project-specific details (repository URL, username, etc.) as needed
+
+The file will be properly rendered when viewed on GitHub or other Markdown-supporting platforms.
 ```
-
-**Response**:
-
-json
-
-```json
-{
-  "BIP32": [{"derivation_path": "m/32'/0'/0'/0/0", "address": "1...", "public_key": "02...", "private_key": null}],
-  "BIP44": [{"derivation_path": "m/44'/0'/0'/0/0", "address": "1...", "public_key": "02...", "private_key": null}],
-  "BIP49": [{"derivation_path": "m/49'/0'/0'/0/0", "address": "3...", "public_key": "03...", "private_key": null}],
-  "BIP84": [{"derivation_path": "m/84'/0'/0'/0/0", "address": "bc1...", "public_key": "02...", "private_key": null}],
-  "BIP86": [{"derivation_path": "m/86'/0'/0'/0/0", "address": "bc1p...", "public_key": "03...", "private_key": null}],
-  "BIP141_Wrapped_SegWit_via_BIP49": [{"derivation_path": "m/49'/0'/0'/0/0", "address": "3...", "public_key": "03...", "private_key": null}],
-  "BIP141_Native_SegWit_via_BIP84": [{"derivation_path": "m/84'/0'/0'/0/0", "address": "bc1...", "public_key": "02...", "private_key": null}]
-}
-```
-
-## Endpoints
-
-| Endpoint                                  | Method | Summary                        | Description                                                  |
-| ----------------------------------------- | ------ | ------------------------------ | ------------------------------------------------------------ |
-| /                                         | GET    | Root Endpoint                  | Returns a simple greeting message.                           |
-| /generate-mnemonic                        | GET    | Generate BIP39 Mnemonic        | Generates a new BIP39 mnemonic phrase and seed.              |
-| /generate-brain-wallet                    | POST   | Generate Brain Wallet          | Generates a Bitcoin address and keys from a passphrase.      |
-| /generate-bip32-addresses                 | POST   | Generate BIP32 Addresses       | Generates BIP32 legacy addresses.                            |
-| /generate-bip44-addresses                 | POST   | Generate BIP44 Addresses       | Generates BIP44 legacy P2PKH addresses.                      |
-| /generate-bip49-addresses                 | POST   | Generate BIP49 Addresses       | Generates BIP49 Wrapped SegWit (P2SH-P2WPKH) addresses.      |
-| /generate-bip84-addresses                 | POST   | Generate BIP84 Addresses       | Generates BIP84 Native SegWit (P2WPKH) addresses.            |
-| /generate-bip86-addresses                 | POST   | Generate BIP86 Addresses       | Generates BIP86 Taproot (P2TR) addresses.                    |
-| /generate-bip141-wrapped-segwit-via-bip49 | POST   | Generate BIP141 Wrapped SegWit | Generates BIP141-compatible Wrapped SegWit addresses using BIP49. |
-| /generate-bip141-native-segwit-via-bip84  | POST   | Generate BIP141 Native SegWit  | Generates BIP141-compatible Native SegWit addresses using BIP84. |
-| /generate-bip85-child-mnemonic            | POST   | Generate BIP85 Child Mnemonic  | Generates a BIP85 child mnemonic from a master mnemonic.     |
-| /generate-all-bip-addresses               | POST   | Generate All BIP Addresses     | Generates addresses for all supported BIP types (BIP32, BIP44, BIP49, BIP84, BIP86, BIP141). |
-
-## Request Parameters
-
-- **AddressRequest** (used by most POST endpoints):
-  - mnemonic (str, required): BIP39 mnemonic phrase.
-  - passphrase (str, optional): Passphrase for seed derivation (defaults to "").
-  - num_addresses (int, optional): Number of addresses to generate (1 to 10, defaults to 1).
-  - include_private_keys (bool, optional): Include private keys in the response (defaults to false).
-- **BrainWalletRequest**:
-  - passphrase (str, required): Passphrase for brain wallet generation.
-  - include_private_keys (bool, optional): Include private key in the response (defaults to false).
-- **BIP85Request**:
-  - mnemonic (str, required): Master mnemonic.
-  - passphrase (str, optional): Passphrase (defaults to "").
-  - app_index (int, optional): Application index (defaults to 39).
-  - word_count (int, optional): Number of words in child mnemonic (12, 15, 18, 21, 24; defaults to 12).
-  - index (int, optional): Child index (defaults to 0).
-
-## Security Notes
-
-- **Private Keys**: By default, private keys are not returned (include_private_keys=false) to enhance security. Set to true only when necessary and handle responses securely.
-- **Mnemonic Safety**: Store mnemonics and seeds securely; exposure compromises all derived addresses.
-- **Production Use**: Use HTTPS in production to encrypt requests and responses.
-
-## Dependencies
-
-- **FastAPI**: Web framework for building the API.
-- **Uvicorn**: ASGI server to run the application.
-- **Pydantic**: Data validation and serialization.
-- **ecdsa**: Elliptic Curve Digital Signature Algorithm for key generation.
-- **base58**: Base58 encoding for Bitcoin addresses and keys.
-- **bip-utils**: BIP39, BIP44, BIP49, BIP84, BIP86 implementations.
-- **bip32utils**: BIP32 HD wallet support.
-- **mnemonic**: BIP39 mnemonic generation.
-
-## Contributing
-
-Contributions are welcome! Please submit a pull request or open an issue on GitHub.
-
-1. Fork the repository.
-2. Create a feature branch (git checkout -b feature/your-feature).
-3. Commit changes (git commit -am 'Add your feature').
-4. Push to the branch (git push origin feature/your-feature).
-5. Open a pull request.
-
-## License
-
-This project is licensed under the MIT License. See the LICENSE file for details.
-
-------
-
-## Notes on the README
-
-- **Structure**: Follows a standard README format with sections for overview, setup, usage, endpoints, and additional info.
-- **Examples**: Includes practical curl commands to demonstrate API usage.
-- **Endpoint Table**: Summarizes all endpoints with their methods, summaries, and descriptions, reflecting the code’s documentation.
-- **Security**: Highlights the default exclusion of private keys and best practices.
-- **Assumptions**: Assumes the file is named main.py and the repository is hosted on GitHub (adjust the URL as needed).
-
-Feel free to customize this further based on your specific deployment details or additional features! Let me know if you need adjustments.
