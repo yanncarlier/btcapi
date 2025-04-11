@@ -43,6 +43,7 @@ app = FastAPI(
 origins = [
     "http://127.0.0.1:3000",
     "https://bitcointx.vercel.app"
+]
 
 app.add_middleware(
     CORSMiddleware,
