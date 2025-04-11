@@ -15,15 +15,15 @@ import base58
 from bip_utils import (
     Bip39SeedGenerator, Bip44, Bip44Coins, Bip44Changes,
     Bip49, Bip49Coins, Bip84, Bip84Coins, Bip39MnemonicValidator,
-    Bip86, Bip86Coins  # Added for BIP86 support
+    Bip86, Bip86Coins
 )
 from bip32utils import BIP32Key, BIP32_HARDEN
 from mnemonic import Mnemonic
 
 # Constants
-MAX_ADDRESSES = 10  # Maximum number of addresses per request
-RATE_LIMIT = 60     # Maximum requests per IP
-TIME_FRAME = timedelta(hours=1)  # Time window for rate limiting
+MAX_ADDRESSES = 10
+RATE_LIMIT = 60
+TIME_FRAME = timedelta(hours=1)
 
 # In-memory storage for rate limiting
 request_timestamps = {}
@@ -113,13 +113,12 @@ class AddressRequest(BaseModel):
     passphrase: Optional[str] = ""
     num_addresses: Optional[int] = 1
     include_private_keys: bool = False
-    derivation_path: Optional[str] = "m/0/{index}"  # Only used for BIP32
+    derivation_path: Optional[str] = "m/0/{index}"
 
 class AddressDetails(BaseModel):
     derivation_path: str
     address: str
     public_key: str
-    extended_private_key: Optional[str] = None
     private_key: Optional[str] = None
     wif: Optional[str] = None
 
@@ -173,18 +172,15 @@ async def _generate_bip32_addresses(request: AddressRequest) -> dict:
             address = key.Address()
             public_key = key.PublicKey().hex()
             if request.include_private_keys:
-                extended_private_key = key.ExtendedKey()
                 private_key = key.PrivateKey().hex()
                 wif = key.WalletImportFormat()
             else:
-                extended_private_key = None
                 private_key = None
                 wif = None
             addresses.append({
                 "derivation_path": derivation_path,
                 "address": address,
                 "public_key": public_key,
-                "extended_private_key": extended_private_key,
                 "private_key": private_key,
                 "wif": wif
             })
@@ -209,18 +205,15 @@ async def _generate_bip_addresses(request: AddressRequest, bip_class, coin_type,
             public_key_bytes = addr_ctx.PublicKey().RawCompressed().ToBytes()
             derivation_path = f"m/{purpose}'/0'/0'/0/{i}"
             if request.include_private_keys:
-                extended_private_key = addr_ctx.PrivateKey().ToExtended()
                 private_key = addr_ctx.PrivateKey().Raw().ToHex()
                 wif = addr_ctx.PrivateKey().ToWif()
             else:
-                extended_private_key = None
                 private_key = None
                 wif = None
             addresses.append({
                 "derivation_path": derivation_path,
                 "address": str(addr_ctx.PublicKey().ToAddress()),
                 "public_key": public_key_bytes.hex(),
-                "extended_private_key": extended_private_key,
                 "private_key": private_key,
                 "wif": wif
             })
