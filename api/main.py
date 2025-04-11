@@ -43,7 +43,7 @@ app = FastAPI(
 
 origins = [
     "http://127.0.0.1:8000",
-    "https://bitcointx.vercel.app,
+    "https://bitcointx.vercel.app",
     "https://btcapi.bitcoin-tx.com"
 ]
 
