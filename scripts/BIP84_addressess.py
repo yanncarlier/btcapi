@@ -45,8 +45,9 @@ try:
         # Construct derivation path manually (BIP84: m/84'/0'/0'/0/i)
         derivation_path = f"m/84'/0'/0'/0/{i}"
         address = bip84_addr_ctx.PublicKey().ToAddress()  # Native SegWit address (P2WPKH)
-        public_key = bip84_addr_ctx.PublicKey().RawCompressed().ToHex()  # Compressed public key in hex
-        private_key = bip84_addr_ctx.PrivateKey().ToWif()  # Private key in WIF format
+        public_key = bip84_addr_ctx.PublicKey().RawCompressed().ToHex()
+        private_key = bip84_addr_ctx.PrivateKey().Raw().ToHex()  # Private key in hex
+        wif = bip84_addr_ctx.PrivateKey().ToWif()  # Private key in WIF format
 
         # Output in specified order
         print("{")
@@ -54,6 +55,7 @@ try:
         print(f"address: {address}")
         print(f"public_key: {public_key}")
         print(f"private_key: {private_key}")
+        print(f"wif: {wif}")
         print("},")
 
 except MnemonicChecksumError as e:
