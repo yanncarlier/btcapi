@@ -49,14 +49,14 @@ try:
     #     derivation_path = f"m/44'/0'/0'/0/{i}"
     #     address = bip44_addr_ctx.PublicKey().ToAddress()
     #     public_key = bip44_addr_ctx.PublicKey().RawCompressed().ToHex()
-    #     private_key = bip44_addr_ctx.PrivateKey().ToWif()
+    #     wif = bip44_addr_ctx.PrivateKey().ToWif()
 
     #     # Output in specified order
     #     print("++++++++++++++++++++++++++++++++++++++++++++")
     #     print(f"derivation_path: {derivation_path}")
     #     print(f"address: {address}")
     #     print(f"public_key: {public_key}")
-    #     print(f"private_key: {private_key}")
+    #     print(f"wif: {wif}")
 
     # print("\n")
 
@@ -73,7 +73,8 @@ try:
         derivation_path = f"m/49'/0'/0'/0/{i}"
         address = bip49_addr_ctx.PublicKey().ToAddress()
         public_key = bip49_addr_ctx.PublicKey().RawCompressed().ToHex()
-        private_key = bip49_addr_ctx.PrivateKey().ToWif()
+        private_key = bip49_addr_ctx.PrivateKey().Raw().ToHex()
+        wif = bip49_addr_ctx.PrivateKey().ToWif()
 
         # Output in specified order
         print("{")
@@ -81,6 +82,7 @@ try:
         print(f"address: {address}")
         print(f"public_key: {public_key}")
         print(f"private_key: {private_key}")
+        print(f"wif: {wif}")
         print("},")
 
 except MnemonicChecksumError as e:
