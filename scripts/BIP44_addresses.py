@@ -6,7 +6,7 @@ from bip_utils import Bip39SeedGenerator, Bip44, Bip44Coins, Bip44Changes, Bip39
 from bip_utils.utils.mnemonic import MnemonicChecksumError
 
 # Example BIP39 mnemonic seed phrase
-mnemonic = "caution blush hill vintage park empower coin mystery earth unaware control fault"
+mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
 passphrase = ""  # Optional passphrase (default is empty string; can be changed by user)
 
 try:
