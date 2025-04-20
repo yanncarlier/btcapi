@@ -45,7 +45,8 @@ try:
         # Extract required information
         address = bip44_addr_ctx.PublicKey().ToAddress()  # Bitcoin address
         public_key = bip44_addr_ctx.PublicKey().RawCompressed().ToHex()  # Public key in hex
-        private_key = bip44_addr_ctx.PrivateKey().ToWif()  # Private key in WIF format
+        private_key = bip44_addr_ctx.PrivateKey().Raw().ToHex()
+        wif = bip44_addr_ctx.PrivateKey().ToWif()  # Private key in WIF format
 
         # Print the output in the specified order
         print("{")
@@ -53,6 +54,7 @@ try:
         print(f"address: {address}")
         print(f"public_key: {public_key}")
         print(f"private_key: {private_key}")
+        print(f"wif: {wif}")
         print("},")
 
 except MnemonicChecksumError as e:
