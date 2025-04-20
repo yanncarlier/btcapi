@@ -6,7 +6,7 @@ conn = http.client.HTTPSConnection("blockchain.info")
 payload = ''
 headers = {
   }
-conn.request("GET", "/q/addressbalance/1EzwoHtiXB4iFwedPr49iywjZn2nnekhoj", payload, headers)
+conn.request("GET", "/q/addressbalance/bc1p5cyxnuxmeuwuvkwfem96lqzszd02n6xdcjrs20cac6yqjjwudpxqkedrcr", payload, headers)
 res = conn.getresponse()
 data = res.read()
 print(data.decode("utf-8"))

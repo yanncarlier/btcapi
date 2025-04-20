@@ -61,7 +61,7 @@ def brain_wallet(passphrase):
     address = base58.b58encode(bin_addr).decode('utf-8')
     return wif, address
 # Example usage
-passphrase = "my very secret passphrase"  # Never use such simple passphrases in real life!
+passphrase = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"  # Never use such simple passphrases in real life!
 wif, bitcoin_address = brain_wallet(passphrase)
 print(f"WIF Private Key: {wif}")
 print(f"Bitcoin Address: {bitcoin_address}")
