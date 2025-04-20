@@ -46,7 +46,8 @@ try:
         derivation_path = f"m/86'/0'/0'/0/{i}"
         address = bip86_addr_ctx.PublicKey().ToAddress()  # Taproot address (starts with 'bc1p')
         public_key = bip86_addr_ctx.PublicKey().RawCompressed().ToHex()  # Compressed public key in hex
-        private_key = bip86_addr_ctx.PrivateKey().ToWif()  # Private key in WIF format
+        private_key = bip86_addr_ctx.PrivateKey().Raw().ToHex()  # Private key in hex
+        wif = bip86_addr_ctx.PrivateKey().ToWif()  # Private key in WIF format
 
         # Output in a structured format
         print("{")
@@ -54,6 +55,7 @@ try:
         print(f"address: {address}")
         print(f"public_key: {public_key}")
         print(f"private_key: {private_key}")
+        print(f"wif: {wif}")
         print("},")
 
 except MnemonicChecksumError as e:
