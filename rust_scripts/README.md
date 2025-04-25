@@ -76,3 +76,11 @@ Usage: ./blockstream_balance_loop <file_name>
 ```bash
 ./generate_mnemonic bip-0039/english.txt 12 | tee mnemonic.txt | xargs -I {} ./generate_addresses "{}" "m/44'/0'/0'/0" "" | grep address | cut -d ':' -f 2 > addresses.txt && ./blockstream_balance_loop addresses.txt
 ```
+
+```bash
+while true; do
+    if ./generate_mnemonic bip-0039/english.txt 12 | tee mnemonic.txt | xargs -I {} ./generate_addresses "{}" "m/44'/0'/0'/0" "" | grep address | cut -d ':' -f 2 > addresses.txt && ./blockstream_balance_loop addresses.txt | tee /dev/tty | grep -q -v "Balance: 0 satoshis"; then
+        break
+    fi
+done
+```
