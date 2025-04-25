@@ -5,7 +5,6 @@ use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::process;
 
-// Define structs to match the JSON structure
 #[derive(Deserialize)]
 struct AddressInfo {
     chain_stats: ChainStats,
@@ -52,6 +51,9 @@ fn main() -> io::Result<()> {
                         let balance = address_info.chain_stats.funded_txo_sum
                             - address_info.chain_stats.spent_txo_sum;
                         println!("Address: {}, Balance: {} satoshis", address, balance);
+                        if balance > 0 {
+                            break; // Stop processing further addresses
+                        }
                     }
                     Err(e) => eprintln!("Error parsing JSON for address {}: {}", address, e),
                 }
