@@ -1,0 +1,11 @@
+[package]
+name = "bitcoin_address_generator"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bip39 = "2.0.0"
+bip32 = "0.5.1"
+bitcoin = "0.29.2"
+hex = "0.4.3"
+k256 = "0.13.3"
