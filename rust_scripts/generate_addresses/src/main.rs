@@ -1,5 +1,5 @@
 use bip39::{Mnemonic, Language};
-use bip32::{ExtendedPrivateKey, ChildNumber};
+use bip32::{ExtendedPrivateKey, ChildNumber, DerivationPath};
 use bitcoin::{Network, PrivateKey, PublicKey, Address};
 use hex;
 use k256::ecdsa::SigningKey;
@@ -10,17 +10,19 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     
     // Validate argument count
-    if args.len() < 2 || args.len() > 3 {
-        println!("Usage: {} <mnemonic_phrase> [passphrase]", args[0]);
+    if args.len() < 3 || args.len() > 4 {
+        println!("Usage: {} <mnemonic_phrase> <derivation_path> [passphrase]", args[0]);
         return;
     }
     
-    // Parse mnemonic phrase and passphrase
+    // Parse arguments
     let mnemonic_phrase = args[1].trim();
-    let passphrase = if args.len() == 3 { args[2].as_str() } else { "" };
+    let derivation_path_str = args[2].trim();
+    let passphrase = if args.len() == 4 { args[3].as_str() } else { "" };
 
     // Display inputs for verification
     println!("Mnemonic Phrase: {}", mnemonic_phrase);
+    println!("Derivation Path: {}", derivation_path_str);
     println!("Passphrase: {}", if passphrase.is_empty() { "<empty>" } else { passphrase });
 
     // Parse mnemonic
@@ -46,11 +48,15 @@ fn main() {
         }
     };
 
-    // Define parent derivation path: m/0'/0
-    let parent_path = vec![
-        ChildNumber::new(0, true).unwrap(),  // m/0' (hardened)
-        ChildNumber::new(0, false).unwrap(), // m/0'/0
-    ];
+    // Parse the derivation path
+    let derivation_path = match derivation_path_str.parse::<DerivationPath>() {
+        Ok(path) => path,
+        Err(e) => {
+            println!("Error: Invalid derivation path: {}", e);
+            return;
+        }
+    };
+    let parent_path: Vec<ChildNumber> = derivation_path.into_iter().collect();
 
     // Derive parent key
     let mut current_key = xprv;
@@ -60,9 +66,9 @@ fn main() {
     let parent_xprv = current_key;
 
     // Generate 100 addresses
-    for index in 0..100 {
-        // Define child number for current index
-        let child_number = ChildNumber::new(index, false).unwrap(); // m/0'/0/index
+    for index in 0..10 {
+        // Define child number for current index (non-hardened)
+        let child_number = ChildNumber::new(index, false).unwrap();
         let child_xprv = parent_xprv.derive_child(child_number).expect("Failed to derive child key");
 
         // Extract private key
@@ -86,7 +92,7 @@ fn main() {
 
         // Print structured output
         println!("{{");
-        println!("  derivation_path: m/0'/0/{}", index);
+        println!("  derivation_path: {}/{}", derivation_path_str, index);
         println!("  address: {}", address);
         println!("  public_key: {}", public_key_hex);
         println!("  private_key: {}", private_key_hex);

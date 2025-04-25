@@ -1,16 +1,17 @@
+use std::env;
+use std::fs::File;
+use std::io::{self, BufRead, BufReader};
+use std::path::Path;
+use std::collections::HashMap;
 use rand::rngs::OsRng;
 use rand::RngCore;
 use sha2::{Sha256, Digest};
 use bitvec::prelude::*;
-use std::fs::File;
-use std::io::{self, BufRead};
-use std::path::Path;
-use std::collections::HashMap;
 
 // Function to read the wordlist from a file
 fn read_wordlist<P: AsRef<Path>>(path: P) -> io::Result<Vec<String>> {
     let file = File::open(path)?;
-    let reader = io::BufReader::new(file);
+    let reader = BufReader::new(file);
     let wordlist: Vec<String> = reader.lines().collect::<io::Result<Vec<String>>>()?;
     if wordlist.len() != 2048 {
         return Err(io::Error::new(
@@ -22,32 +23,32 @@ fn read_wordlist<P: AsRef<Path>>(path: P) -> io::Result<Vec<String>> {
 }
 
 fn main() -> io::Result<()> {
-    // Read the wordlist from bip-0039/english.txt
-    let wordlist_path = "bip-0039/english.txt";
-    let wordlist = read_wordlist(wordlist_path)?;
-
-    // Parse command-line arguments for number of words
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() != 2 {
-        println!("Usage: {} <number_of_words>", args[0]);
+    // Collect command-line arguments
+    let args: Vec<String> = env::args().collect();
+    if args.len() != 3 {
+        println!("Usage: {} <wordlist_path> <number_of_words>", args[0]);
         return Ok(());
     }
 
-    let words: usize = match args[1].parse() {
+    // Read the wordlist from the specified file path
+    let wordlist = read_wordlist(&args[1])?;
+
+    // Parse the number of words
+    let words: usize = match args[2].parse() {
         Ok(n) => n,
         Err(_) => {
-            println!("Invalid number of words");
+            println!("Invalid number of words: {}", args[2]);
             return Ok(());
         }
     };
 
-    // Validate number of words (must be 12, 15, 18, 21, or 24 per BIP-39)
+    // Validate the number of words
     if ![12, 15, 18, 21, 24].contains(&words) {
         println!("Number of words must be 12, 15, 18, 21, or 24");
         return Ok(());
     }
 
-    // Calculate entropy size in bits (ENT = 32 * (words / 3))
+    // Calculate entropy size in bits and bytes
     let ent_bits = (words / 3) * 32;
     let ent_bytes = ent_bits / 8;
 
@@ -55,51 +56,63 @@ fn main() -> io::Result<()> {
     let mut entropy = vec![0u8; ent_bytes];
     OsRng.fill_bytes(&mut entropy);
 
-    // Compute SHA-256 hash of entropy
+    // Compute SHA-256 hash of the entropy
     let hash = Sha256::digest(&entropy);
 
-    // Calculate checksum size (CS = ENT / 32 bits)
+    // Calculate checksum size in bits
     let cs_bits = ent_bits / 32;
 
-    // Convert to bits with correct BitVec type parameters
+    // Convert entropy and hash to bit vectors
     let entropy_bits = BitVec::<u8, Msb0>::from_slice(&entropy);
     let hash_bits = BitVec::<u8, Msb0>::from_slice(&hash);
-    let checksum_bits = &hash_bits[..cs_bits];
+    let checksum_bits = &hash_bits[0..cs_bits];
 
-    // Combine entropy and checksum
+    // Combine entropy and checksum bits
     let mut total_bits = entropy_bits;
     total_bits.extend_from_bitslice(checksum_bits);
 
-    // Generate mnemonic by splitting into 11-bit chunks
+    // Generate the mnemonic by splitting into 11-bit chunks
     let mut mnemonic = Vec::new();
     for i in 0..words {
-        let chunk = &total_bits[i * 11..i * 11 + 11];
+        let start = i * 11;
+        let end = start + 11;
+        let chunk = &total_bits[start..end];
         let index = chunk.load_be::<u16>() as usize;
         mnemonic.push(&wordlist[index]);
     }
 
-    // Convert Vec<&String> to Vec<&str> and join with spaces
+    // Join the mnemonic words into a phrase and print it
     let mnemonic_phrase: String = mnemonic.iter().map(|s| s.as_str()).collect::<Vec<&str>>().join(" ");
     println!("{}", mnemonic_phrase);
 
-    // Verify the mnemonic
-    let word_to_index: HashMap<&str, usize> = wordlist.iter().enumerate().map(|(i, word)| (word.as_str(), i)).collect();
+    // Verification: Create a word-to-index mapping
+    let word_to_index: HashMap<&str, usize> = wordlist
+        .iter()
+        .enumerate()
+        .map(|(i, word)| (word.as_str(), i))
+        .collect();
+
+    // Split the mnemonic phrase back into words
     let mnemonic_words: Vec<&str> = mnemonic_phrase.split_whitespace().collect();
+
+    // Recover the bits from the mnemonic words
     let mut recovered_bits = BitVec::<u8, Msb0>::new();
     for &word in &mnemonic_words {
         let index = *word_to_index.get(word).expect("Word not found in wordlist");
         let index_u16 = index as u16;
-        for bit_pos in (0..11).rev() { // Push bits 10 to 0
+        for bit_pos in (0..11).rev() {
             let bit = (index_u16 >> bit_pos) & 1;
             recovered_bits.push(bit != 0);
         }
     }
-    let ent_bits = words * 11 - cs_bits; // Recalculate ent_bits if needed
-    let entropy_recovered = &recovered_bits[0..ent_bits];
-    let checksum_recovered = &recovered_bits[ent_bits..ent_bits + cs_bits];
 
-    // Convert entropy_recovered to bytes manually
-    let mut entropy_bytes = vec![0u8; (ent_bits + 7) / 8];
+    // Split recovered bits into entropy and checksum
+    let recovered_ent_bits = words * 11 - cs_bits;
+    let entropy_recovered = &recovered_bits[0..recovered_ent_bits];
+    let checksum_recovered = &recovered_bits[recovered_ent_bits..recovered_ent_bits + cs_bits];
+
+    // Convert recovered entropy bits back to bytes
+    let mut entropy_bytes = vec![0u8; ent_bytes];
     for (i, bit) in entropy_recovered.iter().enumerate() {
         if *bit {
             let byte_index = i / 8;
@@ -107,16 +120,14 @@ fn main() -> io::Result<()> {
             entropy_bytes[byte_index] |= 1 << bit_index;
         }
     }
-    let entropy_bytes = &entropy_bytes[0..ent_bytes];
 
-    // Compute hash and verify checksum
-    let hash_recovered = Sha256::digest(entropy_bytes);
+    // Recompute the hash and checksum from recovered entropy
+    let hash_recovered = Sha256::digest(&entropy_bytes);
     let hash_bits_recovered = BitVec::<u8, Msb0>::from_slice(&hash_recovered);
     let checksum_computed = &hash_bits_recovered[0..cs_bits];
 
-    if checksum_computed == checksum_recovered {
-        // println!("Checksum is valid");
-    } else {
+    // Verify the checksum
+    if checksum_computed != checksum_recovered {
         println!("Checksum is invalid");
     }
 

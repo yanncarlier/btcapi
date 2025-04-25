@@ -54,3 +54,26 @@ For release mode, use:
 ```bash
 cargo run --release
 ```
+
+
+
+
+```bash
+cd bin/
+```
+Usage: ./generate_mnemonic <wordlist_path> <number_of_words>
+```bash
+./generate_mnemonic bip-0039/english.txt 12 
+```
+Usage: ./generate_addresses <mnemonic_phrase> <derivation_path> [passphrase]
+```bash
+./generate_addresses "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about" "m/44'/0'/0'/0" ""
+```
+Usage: ./blockstream_balance_loop <file_name>
+```bash
+./blockstream_balance_loop addresses.txt
+```
+```bash
+./generate_mnemonic bip-0039/english.txt 12 | tee mnemonic.txt | xargs -I {} ./generate_addresses "{}" "m/44'/0'/0'/0" "" | grep address | cut -d ':' -f 2 > addresses.txt
+./blockstream_balance_loop addresses.txt
+```

@@ -1,7 +1,9 @@
 use reqwest::blocking::get;
 use serde::Deserialize;
+use std::env;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
+use std::process;
 
 // Define structs to match the JSON structure
 #[derive(Deserialize)]
@@ -16,8 +18,17 @@ struct ChainStats {
 }
 
 fn main() -> io::Result<()> {
-    // Open the addresses.txt file
-    let file = File::open("addresses.txt")?;
+    // Collect command-line arguments
+    let args: Vec<String> = env::args().collect();
+
+    // Check if a file name argument is provided
+    if args.len() < 2 {
+        eprintln!("Usage: {} <file_name>", args[0]);
+        process::exit(1);
+    }
+
+    // Open the file specified by the argument
+    let file = File::open(&args[1])?;
     let reader = BufReader::new(file);
 
     // Loop over each line in the file
