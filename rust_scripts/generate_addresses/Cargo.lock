@@ -71,17 +71,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9425c3bf7089c983facbae04de54513cce73b41c7f9ff8c845b54e7bc64ebbfb"
 
 [[package]]
-name = "bitcoin_address_generator"
-version = "0.1.0"
-dependencies = [
- "bip32",
- "bip39",
- "bitcoin",
- "hex",
- "k256",
-]
-
-[[package]]
 name = "bitcoin_hashes"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -224,6 +213,17 @@ checksum = "c0b50bfb653653f9ca9095b427bed08ab8d75a137839d9ad64eb11810d5b6393"
 dependencies = [
  "rand_core",
  "subtle",
+]
+
+[[package]]
+name = "generate_addresses"
+version = "0.1.0"
+dependencies = [
+ "bip32",
+ "bip39",
+ "bitcoin",
+ "hex",
+ "k256",
 ]
 
 [[package]]
