@@ -34,3 +34,11 @@ cargo run --release -- 12
 Compile and run the program with a command-line argument specifying the number of words:
 
 - Replace 12 with 15, 18, 21, or 24 as desired.
+
+
+
+Example:
+```bash
+cd generate_mnemonic
+target/release/bip39_generator 12
+```
