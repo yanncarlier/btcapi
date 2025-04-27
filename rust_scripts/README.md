@@ -73,6 +73,13 @@ Usage: ./blockstream_balance_loop <file_name>
 ```bash
 ./blockstream_balance_loop addresses.txt
 ```
+
+Vibe coding with grok, this is just a fun exercise.
+The odds of finding an address with some bitcoins in it per cycle are approximately 2.94×10−312.94 \times 10^{-31}2.94 \times 10^{-31}
+ to 1, assuming there are about 100 million seeds in use. This probability is extremely low, reflecting the vastness of the seed space and the security of Bitcoin’s design. Alternatively, as a ratio, the odds are 1 to 3.4×10303.4 \times 10^{30}3.4 \times 10^{30}
+, but the probability 2.94×10−312.94 \times 10^{-31}2.94 \times 10^{-31}
+ is a clear, concise response to the query.
+ 
 ```bash
 ./generate_mnemonic bip-0039/english.txt 12 | tee mnemonic.txt | xargs -I {} ./generate_addresses "{}" "m/44'/0'/0'/0" "" | grep address | cut -d ':' -f 2 > addresses.txt && ./blockstream_balance_loop addresses.txt
 ```
@@ -84,3 +91,8 @@ while true; do
     fi
 done
 ```
+
+
+
+
+
