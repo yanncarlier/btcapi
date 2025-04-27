@@ -1,0 +1,10 @@
+[package]
+name = "brain_wallet"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+sha2 = "0.9"      # Downgrade to match digest 0.9
+ripemd160 = "0.9" # Already uses digest 0.9
+base58 = "0.2"
+secp256k1 = "0.20"
