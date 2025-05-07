@@ -44,7 +44,9 @@ app = FastAPI(
 origins = [
     # "http://127.0.0.1:3000",
     # "https://bitcointx.vercel.app",
-    "https://*.bitcoin-tx.com"
+    "https://btcapi.bitcoin-tx.com",
+    "https://www.bitcoin-tx.com",
+    "https://bitcoin-tx.com"
 ]
 
 app.add_middleware(
