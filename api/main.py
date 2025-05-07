@@ -35,14 +35,16 @@ app = FastAPI(
     version="1.0.0",
     description="API for generating Bitcoin mnemonic seeds and various address types (BIP32, BIP44, BIP49, BIP84, BIP86).",
     servers=[
-        {"url": "http://127.0.0.1:8000", "description": "Development server"},
-        {"url": "https://btcapi.vercel.app", "description": "Production environment"}
+        # {"url": "http://127.0.0.1:8000", "description": "Development server"},
+        # {"url": "https://btcapi.vercel.app", "description": "Production environment"},
+        {"url": "https://btcapi.bitcoin-tx.com", "description": "Production environment"}
     ]
 )
 
 origins = [
-    "http://127.0.0.1:3000",
-    "https://bitcointx.vercel.app"
+    # "http://127.0.0.1:3000",
+    # "https://bitcointx.vercel.app",
+    "https://btcapi.bitcoin-tx.com"
 ]
 
 app.add_middleware(
