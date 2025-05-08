@@ -71,6 +71,12 @@ try:
 
         # Construct derivation path manually (BIP49: m/49'/0'/0'/0/i)
         derivation_path = f"m/49'/0'/0'/0/{i}"
+
+        # Print the BIP32 Extended Public Key (xpub) when i == 0
+        if i == 0:
+            bip32_xpub = bip49_chg_ctx.PublicKey().ToExtended()
+            print("BIP32 Extended Public Key (xpub):", bip32_xpub)
+
         address = bip49_addr_ctx.PublicKey().ToAddress()
         public_key = bip49_addr_ctx.PublicKey().RawCompressed().ToHex()
         private_key = bip49_addr_ctx.PrivateKey().Raw().ToHex()
