@@ -44,7 +44,7 @@ origins = [
     "https://btcapi.bitcoin-tx.com",
     "https://www.bitcoin-tx.com",
     "https://bitcoin-tx.com",
-    # "http://localhost:3000"
+    "http://localhost:3000"
 ]
 
 app.add_middleware(
