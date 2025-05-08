@@ -35,7 +35,7 @@ app = FastAPI(
     version="1.0.0",
     description="API for generating Bitcoin mnemonic seeds and various address types (BIP32, BIP44, BIP49, BIP84, BIP86).",
     servers=[
-        {"url": "http://0.0.0.0:8000", "description": "Development server"},
+     #   {"url": "http://0.0.0.0:8000", "description": "Development server"},
         {"url": "https://btcapi.bitcoin-tx.com", "description": "Production environment"}
     ]
 )
@@ -44,7 +44,7 @@ origins = [
     "https://btcapi.bitcoin-tx.com",
     "https://www.bitcoin-tx.com",
     "https://bitcoin-tx.com",
-    "http://localhost:3000"
+    # "http://localhost:3000"
 ]
 
 app.add_middleware(
