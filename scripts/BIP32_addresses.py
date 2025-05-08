@@ -30,6 +30,12 @@ try:
     # Generate BIP32 root key from the seed
     root_key = BIP32Key.fromEntropy(seed)
 
+    # Print the BIP32 Root Key
+    # account_xpub = root_key.ExtendedKey()  
+    # print("BIP32 Root Key:", account_xpub)
+
+
+
     # Generate a set number of addresses
     num_addresses = 1
     for i in range(num_addresses):
@@ -39,6 +45,15 @@ try:
                        .ChildKey(0 + BIP32_HARDEN)  # Purpose (BIP44)
                        .ChildKey(0)
                        .ChildKey(i))                 # Address index
+
+ 
+    # Print the BIP32 Extended Private Key
+        # account_xpub = address_key.ExtendedKey()
+        # print("BIP32 Extended Private Key:", account_xpub)
+
+        # Print the BIP32 Extended Public Key (xpub)
+        account_xpub = address_key.ExtendedKey(private=False)  # Set private=False to get xpub
+        print("BIP32 Extended Public Key (xpub):", account_xpub)
 
         # Extract required information
         derivation_path = f"m/0'/0/{i}"

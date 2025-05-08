@@ -33,6 +33,10 @@ try:
     bip84_mst_ctx = Bip84.FromSeed(seed_bytes, Bip84Coins.BITCOIN)
     bip84_acc_ctx = bip84_mst_ctx.Purpose().Coin().Account(0)
 
+    # Print the Account Extended Public Key (xpub)
+    account_xpub = bip84_acc_ctx.PublicKey().ToExtended()
+    print("Account Extended Public Key (xpub):", account_xpub)
+    
     # Generate a set number of BIP84 addresses
     num_addresses = 1
     print("Generating BIP84 (Native SegWit P2WPKH) Addresses:")
