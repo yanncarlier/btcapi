@@ -44,6 +44,12 @@ try:
 
         # Construct derivation path manually (BIP86: m/86'/0'/0'/0/i)
         derivation_path = f"m/86'/0'/0'/0/{i}"
+
+             # Print the BIP32 Extended Public Key (xpub) when i == 0
+        if i == 0:
+            bip32_xpub = bip86_chg_ctx.PublicKey().ToExtended()
+            print("BIP32 Extended Public Key (xpub):", bip32_xpub)
+               
         address = bip86_addr_ctx.PublicKey().ToAddress()  # Taproot address (starts with 'bc1p')
         public_key = bip86_addr_ctx.PublicKey().RawCompressed().ToHex()  # Compressed public key in hex
         private_key = bip86_addr_ctx.PrivateKey().Raw().ToHex()  # Private key in hex

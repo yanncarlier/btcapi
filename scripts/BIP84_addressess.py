@@ -48,6 +48,12 @@ try:
 
         # Construct derivation path manually (BIP84: m/84'/0'/0'/0/i)
         derivation_path = f"m/84'/0'/0'/0/{i}"
+
+        # Print the BIP32 Extended Public Key (xpub) when i == 0
+        if i == 0:
+            bip32_xpub = bip84_chg_ctx.PublicKey().ToExtended()
+            print("BIP32 Extended Public Key (xpub):", bip32_xpub)
+
         address = bip84_addr_ctx.PublicKey().ToAddress()  # Native SegWit address (P2WPKH)
         public_key = bip84_addr_ctx.PublicKey().RawCompressed().ToHex()
         private_key = bip84_addr_ctx.PrivateKey().Raw().ToHex()  # Private key in hex
