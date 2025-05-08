@@ -37,7 +37,7 @@ try:
 
 
     # Generate a set number of addresses
-    num_addresses = 1
+    num_addresses = 10
     for i in range(num_addresses):
         # Derive Bitcoin address using BIP44 path: m/44'/0'/0'/0/i
         # Note: Original script used m/32', but BIP44 for Bitcoin uses 44'. Adjusted accordingly.
@@ -46,14 +46,14 @@ try:
                        .ChildKey(0)
                        .ChildKey(i))                 # Address index
 
- 
-    # Print the BIP32 Extended Private Key
-        # account_xpub = address_key.ExtendedKey()
-        # print("BIP32 Extended Private Key:", account_xpub)
+        if i == 0:
+            # Print the BIP32 Extended Private Key
+            # account_xpub = address_key.ExtendedKey()
+            # print("BIP32 Extended Private Key:", account_xpub)
 
-        # Print the BIP32 Extended Public Key (xpub)
-        account_xpub = address_key.ExtendedKey(private=False)  # Set private=False to get xpub
-        print("BIP32 Extended Public Key (xpub):", account_xpub)
+            # Print the BIP32 Extended Public Key (xpub)
+            account_xpub = address_key.ExtendedKey(private=False)  # Set private=False to get xpub
+            print("BIP32 Extended Public Key (xpub):", account_xpub)
 
         # Extract required information
         derivation_path = f"m/0'/0/{i}"
