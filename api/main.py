@@ -35,7 +35,7 @@ app = FastAPI(
     version="1.0.0",
     description="API for generating Bitcoin mnemonic seeds and various address types (BIP32, BIP44, BIP49, BIP84, BIP86).",
     servers=[
-        # {"url": "http://0.0.0.0:8000", "description": "Development server"},
+        {"url": "http://0.0.0.0:8000", "description": "Development server"},
         {"url": "https://btcapi.bitcoin-tx.com", "description": "Production environment"}
     ]
 )
@@ -43,7 +43,8 @@ app = FastAPI(
 origins = [
     "https://btcapi.bitcoin-tx.com",
     "https://www.bitcoin-tx.com",
-    "https://bitcoin-tx.com"
+    "https://bitcoin-tx.com",
+    "http://localhost:3000"
 ]
 
 app.add_middleware(
@@ -121,9 +122,6 @@ class AddressDetails(BaseModel):
     private_key: Optional[str] = None
     wif: Optional[str] = None
 
-class AddressListResponse(BaseModel):
-    addresses: list[AddressDetails]
-
 class Bip32AddressDetails(BaseModel):
     derivation_path: str
     address: str
@@ -132,6 +130,7 @@ class Bip32AddressDetails(BaseModel):
     wif: Optional[str] = None
 
 class Bip32AddressListResponse(BaseModel):
+    account_xpub: str
     bip32_xpub: str
     addresses: list[Bip32AddressDetails]
 
@@ -174,9 +173,22 @@ async def _generate_bip32_addresses(request: AddressRequest) -> dict:
         parts = request.derivation_path.split('/')
         if parts[-1] != '{index}':
             raise ValueError("Derivation path must end with '/{index}'")
-        base_parts = parts[:-1]
+        base_parts = parts[:-1]  # e.g., ['m', '0\'', '0']
+        account_parts = parts[:-2]  # e.g., ['m', '0\'']
         base_path = '/'.join(base_parts)
+        account_path = '/'.join(account_parts) if len(account_parts) > 1 else "m"
 
+        # Derive account_xpub (one level above base_key)
+        account_key = root_key
+        for part in account_parts[1:]:
+            if "'" in part:
+                index = int(part[:-1]) + BIP32_HARDEN
+            else:
+                index = int(part)
+            account_key = account_key.ChildKey(index)
+        account_xpub = account_key.ExtendedKey(private=False)
+
+        # Derive bip32_xpub (base_key level)
         base_key = root_key
         for part in base_parts[1:]:
             if "'" in part:
@@ -184,7 +196,6 @@ async def _generate_bip32_addresses(request: AddressRequest) -> dict:
             else:
                 index = int(part)
             base_key = base_key.ChildKey(index)
-
         bip32_xpub = base_key.ExtendedKey(private=False)
 
         addresses = []
@@ -214,6 +225,7 @@ async def _generate_bip32_addresses(request: AddressRequest) -> dict:
             })
 
         return {
+            "account_xpub": account_xpub,
             "bip32_xpub": bip32_xpub,
             "addresses": addresses
         }
@@ -231,8 +243,9 @@ async def _generate_bip_addresses(request: AddressRequest, bip_class, coin_type,
         bip_ctx = bip_class.FromSeed(seed_bytes, coin_type).Purpose().Coin().Account(0)
         change_ctx = bip_ctx.Change(Bip44Changes.CHAIN_EXT)
         
-        # Compute bip32_xpub at the account level (e.g., m/44'/0'/0')
-        # bip32_xpub = bip_ctx.PublicKey().ToExtended()
+        # Compute account_xpub at the account level (e.g., m/44'/0'/0')
+        account_xpub = bip_ctx.PublicKey().ToExtended()
+        # Compute bip32_xpub at the change level (e.g., m/44'/0'/0'/0)
         bip32_xpub = change_ctx.PublicKey().ToExtended()
         
         addresses = []
@@ -254,6 +267,7 @@ async def _generate_bip_addresses(request: AddressRequest, bip_class, coin_type,
                 "wif": wif
             })
         return {
+            "account_xpub": account_xpub,
             "bip32_xpub": bip32_xpub,
             "addresses": addresses
         }
@@ -321,6 +335,7 @@ async def generate_bip32_addresses(request: AddressRequest = Body(
 )):
     result = await _generate_bip32_addresses(request)
     return Bip32AddressListResponse(
+        account_xpub=result["account_xpub"],
         bip32_xpub=result["bip32_xpub"],
         addresses=[Bip32AddressDetails(**addr) for addr in result["addresses"]]
     )
@@ -344,6 +359,7 @@ async def generate_bip44_addresses(
 ):
     result = await _generate_bip_addresses(request, Bip44, Bip44Coins.BITCOIN, 44)
     return Bip32AddressListResponse(
+        account_xpub=result["account_xpub"],
         bip32_xpub=result["bip32_xpub"],
         addresses=[Bip32AddressDetails(**addr) for addr in result["addresses"]]
     )
@@ -367,6 +383,7 @@ async def generate_bip49_addresses(
 ):
     result = await _generate_bip_addresses(request, Bip49, Bip49Coins.BITCOIN, 49)
     return Bip32AddressListResponse(
+        account_xpub=result["account_xpub"],
         bip32_xpub=result["bip32_xpub"],
         addresses=[Bip32AddressDetails(**addr) for addr in result["addresses"]]
     )
@@ -390,6 +407,7 @@ async def generate_bip84_addresses(
 ):
     result = await _generate_bip_addresses(request, Bip84, Bip84Coins.BITCOIN, 84)
     return Bip32AddressListResponse(
+        account_xpub=result["account_xpub"],
         bip32_xpub=result["bip32_xpub"],
         addresses=[Bip32AddressDetails(**addr) for addr in result["addresses"]]
     )
@@ -413,6 +431,7 @@ async def generate_bip86_addresses(
 ):
     result = await _generate_bip_addresses(request, Bip86, Bip86Coins.BITCOIN, 86)
     return Bip32AddressListResponse(
+        account_xpub=result["account_xpub"],
         bip32_xpub=result["bip32_xpub"],
         addresses=[Bip32AddressDetails(**addr) for addr in result["addresses"]]
     )
