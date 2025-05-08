@@ -35,15 +35,12 @@ app = FastAPI(
     version="1.0.0",
     description="API for generating Bitcoin mnemonic seeds and various address types (BIP32, BIP44, BIP49, BIP84, BIP86).",
     servers=[
-        # {"url": "http://127.0.0.1:8000", "description": "Development server"},
-        # {"url": "https://btcapi.vercel.app", "description": "Production environment"},
+        # {"url": "http://0.0.0.0:8000", "description": "Development server"},
         {"url": "https://btcapi.bitcoin-tx.com", "description": "Production environment"}
     ]
 )
 
 origins = [
-    # "http://127.0.0.1:3000",
-    # "https://bitcointx.vercel.app",
     "https://btcapi.bitcoin-tx.com",
     "https://www.bitcoin-tx.com",
     "https://bitcoin-tx.com"
@@ -127,6 +124,17 @@ class AddressDetails(BaseModel):
 class AddressListResponse(BaseModel):
     addresses: list[AddressDetails]
 
+class Bip32AddressDetails(BaseModel):
+    derivation_path: str
+    address: str
+    public_key: str
+    private_key: Optional[str] = None
+    wif: Optional[str] = None
+
+class Bip32AddressListResponse(BaseModel):
+    bip32_xpub: str
+    addresses: list[Bip32AddressDetails]
+
 class BrainWalletRequest(BaseModel):
     passphrase: str
     include_private_keys: bool = False
@@ -159,8 +167,26 @@ async def _generate_bip32_addresses(request: AddressRequest) -> dict:
             raise ValueError("Invalid mnemonic phrase.")
         if request.num_addresses < 1 or request.num_addresses > MAX_ADDRESSES:
             raise ValueError(f"Number of addresses must be between 1 and {MAX_ADDRESSES}")
+
         seed_bytes = Bip39SeedGenerator(request.mnemonic).Generate(passphrase=request.passphrase)
         root_key = BIP32Key.fromEntropy(seed_bytes)
+
+        parts = request.derivation_path.split('/')
+        if parts[-1] != '{index}':
+            raise ValueError("Derivation path must end with '/{index}'")
+        base_parts = parts[:-1]
+        base_path = '/'.join(base_parts)
+
+        base_key = root_key
+        for part in base_parts[1:]:
+            if "'" in part:
+                index = int(part[:-1]) + BIP32_HARDEN
+            else:
+                index = int(part)
+            base_key = base_key.ChildKey(index)
+
+        bip32_xpub = base_key.ExtendedKey(private=False)
+
         addresses = []
         for i in range(request.num_addresses):
             derivation_path = request.derivation_path.replace("{index}", str(i))
@@ -186,7 +212,11 @@ async def _generate_bip32_addresses(request: AddressRequest) -> dict:
                 "private_key": private_key,
                 "wif": wif
             })
-        return {"addresses": addresses}
+
+        return {
+            "bip32_xpub": bip32_xpub,
+            "addresses": addresses
+        }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -200,6 +230,10 @@ async def _generate_bip_addresses(request: AddressRequest, bip_class, coin_type,
         seed_bytes = Bip39SeedGenerator(request.mnemonic).Generate(passphrase=request.passphrase)
         bip_ctx = bip_class.FromSeed(seed_bytes, coin_type).Purpose().Coin().Account(0)
         change_ctx = bip_ctx.Change(Bip44Changes.CHAIN_EXT)
+        
+        # Compute bip32_xpub at the account level (e.g., m/44'/0'/0')
+        # bip32_xpub = bip_ctx.PublicKey().ToExtended()
+        bip32_xpub = change_ctx.PublicKey().ToExtended()
         
         addresses = []
         for i in range(request.num_addresses):
@@ -219,7 +253,10 @@ async def _generate_bip_addresses(request: AddressRequest, bip_class, coin_type,
                 "private_key": private_key,
                 "wif": wif
             })
-        return {"addresses": addresses}
+        return {
+            "bip32_xpub": bip32_xpub,
+            "addresses": addresses
+        }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -268,7 +305,7 @@ async def generate_brain_wallet_endpoint(request: BrainWalletRequest = Body(...)
 
 @app.post(
     "/generate-bip32-addresses",
-    response_model=AddressListResponse,
+    response_model=Bip32AddressListResponse,
     summary="Generate BIP32 Addresses (custom derivation paths)",
     description="Generates BIP32 legacy Bitcoin addresses from a mnemonic phrase with custom derivation paths."
 )
@@ -282,11 +319,15 @@ async def generate_bip32_addresses(request: AddressRequest = Body(
         "derivation_path": "m/0'/0/{index}"
     }
 )):
-    return await _generate_bip32_addresses(request)
+    result = await _generate_bip32_addresses(request)
+    return Bip32AddressListResponse(
+        bip32_xpub=result["bip32_xpub"],
+        addresses=[Bip32AddressDetails(**addr) for addr in result["addresses"]]
+    )
 
 @app.post(
     "/generate-bip44-addresses",
-    response_model=AddressListResponse,
+    response_model=Bip32AddressListResponse,
     summary="Generate BIP44 Addresses",
     description="Generates BIP44 legacy Bitcoin addresses (P2PKH) from a mnemonic phrase."
 )
@@ -301,11 +342,15 @@ async def generate_bip44_addresses(
         }
     )
 ):
-    return await _generate_bip_addresses(request, Bip44, Bip44Coins.BITCOIN, 44)
+    result = await _generate_bip_addresses(request, Bip44, Bip44Coins.BITCOIN, 44)
+    return Bip32AddressListResponse(
+        bip32_xpub=result["bip32_xpub"],
+        addresses=[Bip32AddressDetails(**addr) for addr in result["addresses"]]
+    )
 
 @app.post(
     "/generate-bip49-addresses",
-    response_model=AddressListResponse,
+    response_model=Bip32AddressListResponse,
     summary="Generate BIP49 Addresses",
     description="Generates BIP49 Wrapped SegWit (P2SH-P2WPKH) Bitcoin addresses from a mnemonic phrase."
 )
@@ -320,11 +365,15 @@ async def generate_bip49_addresses(
         }
     )
 ):
-    return await _generate_bip_addresses(request, Bip49, Bip49Coins.BITCOIN, 49)
+    result = await _generate_bip_addresses(request, Bip49, Bip49Coins.BITCOIN, 49)
+    return Bip32AddressListResponse(
+        bip32_xpub=result["bip32_xpub"],
+        addresses=[Bip32AddressDetails(**addr) for addr in result["addresses"]]
+    )
 
 @app.post(
     "/generate-bip84-addresses",
-    response_model=AddressListResponse,
+    response_model=Bip32AddressListResponse,
     summary="Generate BIP84 Addresses",
     description="Generates BIP84 Native SegWit (P2WPKH) Bitcoin addresses from a mnemonic phrase."
 )
@@ -339,11 +388,15 @@ async def generate_bip84_addresses(
         }
     )
 ):
-    return await _generate_bip_addresses(request, Bip84, Bip84Coins.BITCOIN, 84)
+    result = await _generate_bip_addresses(request, Bip84, Bip84Coins.BITCOIN, 84)
+    return Bip32AddressListResponse(
+        bip32_xpub=result["bip32_xpub"],
+        addresses=[Bip32AddressDetails(**addr) for addr in result["addresses"]]
+    )
 
 @app.post(
     "/generate-bip86-addresses",
-    response_model=AddressListResponse,
+    response_model=Bip32AddressListResponse,
     summary="Generate BIP86 Addresses",
     description="Generates BIP86 Taproot (P2TR) Bitcoin addresses from a mnemonic phrase."
 )
@@ -358,7 +411,11 @@ async def generate_bip86_addresses(
         }
     )
 ):
-    return await _generate_bip_addresses(request, Bip86, Bip86Coins.BITCOIN, 86)
+    result = await _generate_bip_addresses(request, Bip86, Bip86Coins.BITCOIN, 86)
+    return Bip32AddressListResponse(
+        bip32_xpub=result["bip32_xpub"],
+        addresses=[Bip32AddressDetails(**addr) for addr in result["addresses"]]
+    )
 
 if __name__ == "__main__":
     import uvicorn
