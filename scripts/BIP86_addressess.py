@@ -46,8 +46,8 @@ try:
         bip86_chg_ctx = bip86_acc_ctx.Change(Bip44Changes.CHAIN_EXT)
         bip86_addr_ctx = bip86_chg_ctx.AddressIndex(i)
 
-        # Construct derivation path manually (BIP86: m/86'/0'/0'/0/i)
-        derivation_path = f"m/86'/0'/0'/0/{i}"
+        # Construct derivation path manually (BIP86: m/86'/0'/0'/i)
+        derivation_path = f"m/86'/0'/0'/{i}"
 
              # Print the BIP32 Extended Public Key (xpub) when i == 0
         # if i == 0:
