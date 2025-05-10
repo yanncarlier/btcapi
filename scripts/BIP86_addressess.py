@@ -33,6 +33,10 @@ try:
     bip86_mst_ctx = Bip86.FromSeed(seed_bytes, Bip86Coins.BITCOIN)
     bip86_acc_ctx = bip86_mst_ctx.Purpose().Coin().Account(0)
 
+    # Print the Account Extended Public Key
+    account_xpub = bip86_acc_ctx.PublicKey().ToExtended()
+    print("Account Extended Public Key:", account_xpub)
+
     # Generate a set number of BIP86 addresses (Taproot, enabled by BIP341)
     num_addresses = 1  # Adjustable for more addresses
     print("Generating Taproot (P2TR) Addresses via BIP86:")
@@ -46,9 +50,9 @@ try:
         derivation_path = f"m/86'/0'/0'/0/{i}"
 
              # Print the BIP32 Extended Public Key (xpub) when i == 0
-        if i == 0:
-            bip32_xpub = bip86_chg_ctx.PublicKey().ToExtended()
-            print("BIP32 Extended Public Key (xpub):", bip32_xpub)
+        # if i == 0:
+        #     bip32_xpub = bip86_chg_ctx.PublicKey().ToExtended()
+        #     print("BIP32 Extended Public Key (xpub):", bip32_xpub)
                
         address = bip86_addr_ctx.PublicKey().ToAddress()  # Taproot address (starts with 'bc1p')
         public_key = bip86_addr_ctx.PublicKey().RawCompressed().ToHex()  # Compressed public key in hex
