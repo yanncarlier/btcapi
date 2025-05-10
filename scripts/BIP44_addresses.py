@@ -34,11 +34,11 @@ try:
     bip44_acc_ctx = bip44_mst_ctx.Purpose().Coin().Account(0)
 
     # Print the Account Extended Public Key (xpub)
-    # account_xpub = bip44_acc_ctx.PublicKey().ToExtended()
-    # print("Account Extended Public Key (xpub):", account_xpub)
+    account_xpub = bip44_acc_ctx.PublicKey().ToExtended()
+    print("Account Extended Public Key (xpub):", account_xpub)
 
     # Generate a set number of addresses
-    num_addresses = 10  # Number of addresses to generate
+    num_addresses = 1  # Number of addresses to generate
     for i in range(num_addresses):
         # Derive the external chain and address at index i
         bip44_chg_ctx = bip44_acc_ctx.Change(Bip44Changes.CHAIN_EXT)
@@ -48,9 +48,9 @@ try:
         derivation_path = f"m/44'/0'/0'/0/{i}"
 
         # Print the BIP32 Extended Public Key (xpub) when i == 0
-        if i == 0:
-            bip32_xpub = bip44_chg_ctx.PublicKey().ToExtended()
-            print("BIP32 Extended Public Key (xpub):", bip32_xpub)
+        # if i == 0:
+        #     bip32_xpub = bip44_chg_ctx.PublicKey().ToExtended()
+        #     print("BIP32 Extended Public Key (xpub):", bip32_xpub)
 
         # Extract required information
         address = bip44_addr_ctx.PublicKey().ToAddress()  # Bitcoin address
