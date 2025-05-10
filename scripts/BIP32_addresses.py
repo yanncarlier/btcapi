@@ -37,7 +37,7 @@ try:
 
 
     # Generate a set number of addresses
-    num_addresses = 10
+    num_addresses = 
     for i in range(num_addresses):
         # Derive Bitcoin address using BIP44 path: m/44'/0'/0'/0/i
         # Note: Original script used m/32', but BIP44 for Bitcoin uses 44'. Adjusted accordingly.
