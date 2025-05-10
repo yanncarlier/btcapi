@@ -33,9 +33,9 @@ try:
     bip84_mst_ctx = Bip84.FromSeed(seed_bytes, Bip84Coins.BITCOIN)
     bip84_acc_ctx = bip84_mst_ctx.Purpose().Coin().Account(0)
 
-    # Print the Account Extended Public Key (xpub)
+    # Print the Account Extended Public Key
     account_xpub = bip84_acc_ctx.PublicKey().ToExtended()
-    print("Account Extended Public Key (xpub):", account_xpub)
+    print("Account Extended Public Key:", account_xpub)
     
     # Generate a set number of BIP84 addresses
     num_addresses = 1
@@ -50,9 +50,9 @@ try:
         derivation_path = f"m/84'/0'/0'/0/{i}"
 
         # Print the BIP32 Extended Public Key (xpub) when i == 0
-        if i == 0:
-            bip32_xpub = bip84_chg_ctx.PublicKey().ToExtended()
-            print("BIP32 Extended Public Key (xpub):", bip32_xpub)
+        # if i == 0:
+        #     bip32_xpub = bip84_chg_ctx.PublicKey().ToExtended()
+        #     print("BIP32 Extended Public Key (xpub):", bip32_xpub)
 
         address = bip84_addr_ctx.PublicKey().ToAddress()  # Native SegWit address (P2WPKH)
         public_key = bip84_addr_ctx.PublicKey().RawCompressed().ToHex()

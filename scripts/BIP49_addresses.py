@@ -65,6 +65,11 @@ try:
     bip49_mst_ctx = Bip49.FromSeed(seed_bytes, Bip49Coins.BITCOIN)
     bip49_acc_ctx = bip49_mst_ctx.Purpose().Coin().Account(0)
 
+    # Print the Account Extended Public Key
+    account_xpub = bip49_acc_ctx.PublicKey().ToExtended()
+    print("Account Extended Public Key:", account_xpub)
+
+
     for i in range(num_addresses):
         bip49_chg_ctx = bip49_acc_ctx.Change(Bip44Changes.CHAIN_EXT)
         bip49_addr_ctx = bip49_chg_ctx.AddressIndex(i)
@@ -73,9 +78,9 @@ try:
         derivation_path = f"m/49'/0'/0'/0/{i}"
 
         # Print the BIP32 Extended Public Key (xpub) when i == 0
-        if i == 0:
-            bip32_xpub = bip49_chg_ctx.PublicKey().ToExtended()
-            print("BIP32 Extended Public Key (xpub):", bip32_xpub)
+        # if i == 0:
+        #     bip32_xpub = bip49_chg_ctx.PublicKey().ToExtended()
+        #     print("BIP32 Extended Public Key (xpub):", bip32_xpub)
 
         address = bip49_addr_ctx.PublicKey().ToAddress()
         public_key = bip49_addr_ctx.PublicKey().RawCompressed().ToHex()
