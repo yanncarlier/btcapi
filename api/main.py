@@ -8,10 +8,10 @@ from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException, Body, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-
 from pydantic import BaseModel
-import ecdsa
 import base58
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives import serialization
 from bip_utils import (
     Bip39SeedGenerator, Bip44, Bip44Coins, Bip44Changes,
     Bip49, Bip49Coins, Bip84, Bip84Coins, Bip39MnemonicValidator,
@@ -35,7 +35,7 @@ app = FastAPI(
     version="1.0.0",
     description="API for generating Bitcoin mnemonic seeds and various address types (BIP32, BIP44, BIP49, BIP84, BIP86).",
     servers=[
-        # {"url": "http://0.0.0.0:8000", "description": "Development server"},
+        {"url": "http://127.0.0.1:8000/", "description": "Development server"},
         {"url": "https://btcapi.bitcoin-tx.com", "description": "Production environment"}
     ]
 )
@@ -145,19 +145,44 @@ class BrainWalletResponse(BaseModel):
 
 # Helper Functions
 def generate_brain_wallet(passphrase: str) -> tuple[str, str, str]:
-    private_key = hashlib.sha256(passphrase.encode('utf-8')).digest()
-    wif_private_key = b'\x80' + private_key
-    sha = hashlib.sha256(wif_private_key).digest()
-    checksum = hashlib.sha256(sha).digest()[:4]
+    # Generate a private key from the passphrase
+    private_key_bytes = hashlib.sha256(passphrase.encode('utf-8')).digest()
+    
+    # Load the private key into cryptography's ECDSA
+    private_key = ec.derive_private_key(
+        int.from_bytes(private_key_bytes, 'big'),
+        ec.SECP256K1()
+    )
+    
+    # Get WIF private key
+    wif_private_key = b'\x80' + private_key_bytes
+    sha = hashlib.sha256()
+    sha.update(wif_private_key)
+    hash1 = sha.digest()
+    sha = hashlib.sha256()
+    sha.update(hash1)
+    checksum = sha.digest()[:4]
     wif = base58.b58encode(wif_private_key + checksum).decode('utf-8')
-    sk = ecdsa.SigningKey.from_string(private_key, curve=ecdsa.SECP256k1)
-    vk = sk.get_verifying_key()
-    public_key = b'\x04' + vk.to_string()
-    sha_pub = hashlib.sha256(public_key).digest()
-    ripemd160 = hashlib.new('ripemd160', sha_pub).digest()
-    bin_addr = b'\x00' + ripemd160
+    
+    # Create public key
+    public_key = private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.X962,
+        format=serialization.PublicFormat.UncompressedPoint
+    )
+    
+    # Hash for address creation
+    sha = hashlib.sha256()
+    sha.update(public_key)
+    hash1 = sha.digest()
+    ripemd160 = hashlib.new('ripemd160')
+    ripemd160.update(hash1)
+    hash2 = ripemd160.digest()
+    
+    # Add network byte for Bitcoin Mainnet
+    bin_addr = b'\x00' + hash2
     checksum_addr = hashlib.sha256(hashlib.sha256(bin_addr).digest()).digest()[:4]
     address = base58.b58encode(bin_addr + checksum_addr).decode('utf-8')
+    
     return wif, address, public_key.hex()
 
 async def _generate_bip32_addresses(request: AddressRequest) -> dict:
