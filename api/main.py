@@ -1,6 +1,7 @@
 # Standard Library Imports
 from typing import Optional
 import hashlib
+import hmac
 import threading
 from datetime import datetime, timedelta
 
@@ -11,19 +12,14 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import base58
 from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives import serialization
-from bip_utils import (
-    Bip39SeedGenerator, Bip44, Bip44Coins, Bip44Changes,
-    Bip49, Bip49Coins, Bip84, Bip84Coins, Bip39MnemonicValidator,
-    Bip86, Bip86Coins
-)
-from bip32utils import BIP32Key, BIP32_HARDEN
+from cryptography.hazmat.primitives import serialization, hashes
 from mnemonic import Mnemonic
 
 # Constants
 MAX_ADDRESSES = 10
 RATE_LIMIT = 60
 TIME_FRAME = timedelta(hours=1)
+BIP32_HARDEN = 0x80000000  # Hardened index offset
 
 # In-memory storage for rate limiting
 request_timestamps = {}
@@ -35,7 +31,7 @@ app = FastAPI(
     version="1.0.0",
     description="API for generating Bitcoin mnemonic seeds and various address types (BIP32, BIP44, BIP49, BIP84, BIP86).",
     servers=[
-       # {"url": "http://127.0.0.1:8000/", "description": "Development server"},
+        {"url": "http://0.0.0.0:8000/", "description": "Development server"},
         {"url": "https://btcapi.bitcoin-tx.com", "description": "Production environment"}
     ]
 )
@@ -122,17 +118,10 @@ class AddressDetails(BaseModel):
     private_key: Optional[str] = None
     wif: Optional[str] = None
 
-class Bip32AddressDetails(BaseModel):
-    derivation_path: str
-    address: str
-    public_key: str
-    private_key: Optional[str] = None
-    wif: Optional[str] = None
-
 class Bip32AddressListResponse(BaseModel):
     account_xpub: str
     bip32_xpub: str
-    addresses: list[Bip32AddressDetails]
+    addresses: list[AddressDetails]
 
 class BrainWalletRequest(BaseModel):
     passphrase: str
@@ -143,110 +132,185 @@ class BrainWalletResponse(BaseModel):
     public_key: str
     wif_private_key: Optional[str] = None
 
-# Helper Functions
-def generate_brain_wallet(passphrase: str) -> tuple[str, str, str]:
-    # Generate a private key from the passphrase
-    private_key_bytes = hashlib.sha256(passphrase.encode('utf-8')).digest()
-    
-    # Load the private key into cryptography's ECDSA
-    private_key = ec.derive_private_key(
-        int.from_bytes(private_key_bytes, 'big'),
-        ec.SECP256K1()
+# Bech32 Encoding for BIP84 and BIP86
+def bech32_encode(hrp: str, data: bytes) -> str:
+    """Encode data in Bech32 format for Bitcoin addresses (BIP84, BIP86)."""
+    def convertbits(data: bytes, frombits: int, tobits: int, pad: bool = True) -> list[int]:
+        acc = 0
+        bits = 0
+        ret = []
+        maxv = (1 << tobits) - 1
+        for value in data:
+            acc = (acc << 8) | value
+            bits += 8
+            while bits >= tobits:
+                bits -= tobits
+                ret.append((acc >> bits) & maxv)
+        if pad and bits:
+            ret.append((acc << (tobits - bits)) & maxv)
+        return ret
+
+    def create_checksum(hrp: str, data: list[int]) -> list[int]:
+        values = [ord(c) >> 5 for c in hrp] + [0] + [ord(c) & 31 for c in hrp] + data
+        poly = 1
+        for v in values:
+            poly ^= v
+            for _ in range(5):
+                poly = (poly >> 1) ^ (0x3b6a57b2 if poly & 1 else 0)
+        return [(poly >> (5 * (5 - i))) & 31 for i in range(6)]
+
+    charset = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
+    witver = 0  # Witness version 0 for P2WPKH, 1 for P2TR
+    if hrp == "bc" and data[0] == 0x51:  # P2TR (BIP86)
+        witver = 1
+        data = data[2:]  # Remove script prefix \x51\x20
+    data5 = convertbits(data, 8, 5)
+    checksum = create_checksum(hrp, [witver] + data5)
+    return hrp + "1" + "".join(charset[d] for d in ([witver] + data5 + checksum))
+
+# BIP32 Implementation
+def _bip32_derive(seed: bytes, path: str) -> tuple[ec.EllipticCurvePrivateKey, bytes]:
+    """Derive a BIP32 private key and chain code from a seed and derivation path."""
+    def _ckd_priv(k: bytes, c: bytes, index: int) -> tuple[bytes, bytes]:
+        is_hardened = index >= BIP32_HARDEN
+        index = index % BIP32_HARDEN if is_hardened else index
+        if is_hardened:
+            data = b'\x00' + k + index.to_bytes(4, 'big')
+        else:
+            private_key = ec.derive_private_key(int.from_bytes(k, 'big'), ec.SECP256K1())
+            pubkey = private_key.public_key().public_bytes(
+                encoding=serialization.Encoding.X962,
+                format=serialization.PublicFormat.CompressedPoint
+            )
+            data = pubkey + index.to_bytes(4, 'big')
+        hmac_obj = hmac.new(c, data, hashlib.sha512)
+        hmac_data = hmac_obj.digest()
+        Il, Ir = hmac_data[:32], hmac_data[32:]
+        child_k = (int.from_bytes(Il, 'big') + int.from_bytes(k, 'big')) % ec.SECP256K1().key_size
+        if child_k == 0:
+            raise ValueError("Invalid child key (zero)")
+        return child_k.to_bytes(32, 'big'), Ir
+
+    hmac_obj = hmac.new(b"Bitcoin seed", seed, hashlib.sha512)
+    master_key = hmac_obj.digest()
+    k, c = master_key[:32], master_key[32:]
+
+    parts = path.split('/')[1:]  # Skip 'm'
+    for part in parts:
+        if part.endswith("'"):
+            index = int(part[:-1]) + BIP32_HARDEN
+        else:
+            index = int(part)
+        k, c = _ckd_priv(k, c, index)
+
+    private_key = ec.derive_private_key(int.from_bytes(k, 'big'), ec.SECP256K1())
+    return private_key, c
+
+def _bip32_xpub(private_key: ec.EllipticCurvePrivateKey, chain_code: bytes) -> str:
+    """Generate extended public key (xpub) in Base58 format."""
+    pubkey = private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.X962,
+        format=serialization.PublicFormat.CompressedPoint
     )
-    
-    # Get WIF private key
-    wif_private_key = b'\x80' + private_key_bytes
-    sha = hashlib.sha256()
-    sha.update(wif_private_key)
-    hash1 = sha.digest()
-    sha = hashlib.sha256()
-    sha.update(hash1)
-    checksum = sha.digest()[:4]
-    wif = base58.b58encode(wif_private_key + checksum).decode('utf-8')
-    
-    # Create public key
-    public_key = private_key.public_key().public_bytes(
+    version = b'\x04\x88\xB2\x1E'  # xpub prefix for Bitcoin mainnet
+    depth = b'\x00'  # Simplified for master or account level
+    fingerprint = b'\x00\x00\x00\x00'  # Parent fingerprint (0 for simplicity)
+    child_number = b'\x00\x00\x00\x00'  # Child number (0 for simplicity)
+    data = version + depth + fingerprint + child_number + chain_code + pubkey
+    checksum = hashlib.sha256(hashlib.sha256(data).digest()).digest()[:4]
+    return base58.b58encode(data + checksum).decode('utf-8')
+
+def _generate_address(private_key: ec.EllipticCurvePrivateKey, addr_type: str) -> tuple[str, str, str]:
+    """Generate Bitcoin address, public key, and WIF private key for given address type."""
+    pubkey = private_key.public_key().public_bytes(
         encoding=serialization.Encoding.X962,
         format=serialization.PublicFormat.UncompressedPoint
     )
-    
-    # Hash for address creation
-    sha = hashlib.sha256()
-    sha.update(public_key)
-    hash1 = sha.digest()
-    ripemd160 = hashlib.new('ripemd160')
-    ripemd160.update(hash1)
-    hash2 = ripemd160.digest()
-    
-    # Add network byte for Bitcoin Mainnet
-    bin_addr = b'\x00' + hash2
-    checksum_addr = hashlib.sha256(hashlib.sha256(bin_addr).digest()).digest()[:4]
-    address = base58.b58encode(bin_addr + checksum_addr).decode('utf-8')
-    
-    return wif, address, public_key.hex()
+    pubkey_compressed = private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.X962,
+        format=serialization.PublicFormat.CompressedPoint
+    )
+
+    # Generate private key WIF
+    privkey_bytes = private_key.private_numbers().private_value.to_bytes(32, 'big')
+    wif_data = b'\x80' + privkey_bytes
+    wif_checksum = hashlib.sha256(hashlib.sha256(wif_data).digest()).digest()[:4]
+    wif = base58.b58encode(wif_data + wif_checksum).decode('utf-8')
+
+    # Generate address based on type
+    if addr_type == "P2PKH":  # BIP44
+        hash1 = hashlib.sha256(pubkey).digest()
+        hash2 = hashlib.new('ripemd160')
+        hash2.update(hash1)
+        pubkey_hash = hash2.digest()
+        addr_data = b'\x00' + pubkey_hash
+        checksum = hashlib.sha256(hashlib.sha256(addr_data).digest()).digest()[:4]
+        addr = base58.b58encode(addr_data + checksum).decode('utf-8')
+    elif addr_type == "P2SH-P2WPKH":  # BIP49
+        hash1 = hashlib.sha256(pubkey_compressed).digest()
+        hash2 = hashlib.new('ripemd160')
+        hash2.update(hash1)
+        witness_program = hash2.digest()
+        script = b'\x00\x14' + witness_program
+        hash3 = hashlib.sha256(script).digest()
+        hash4 = hashlib.new('ripemd160')
+        hash4.update(hash3)
+        addr_data = b'\x05' + hash4.digest()
+        checksum = hashlib.sha256(hashlib.sha256(addr_data).digest()).digest()[:4]
+        addr = base58.b58encode(addr_data + checksum).decode('utf-8')
+    elif addr_type == "P2WPKH":  # BIP84
+        hash1 = hashlib.sha256(pubkey_compressed).digest()
+        hash2 = hashlib.new('ripemd160')
+        hash2.update(hash1)
+        addr_data = hash2.digest()
+        addr = bech32_encode("bc", b'\x00' + addr_data)
+    elif addr_type == "P2TR":  # BIP86
+        addr_data = pubkey_compressed[1:]  # Remove 0x02/0x03 prefix
+        addr = bech32_encode("bc", b'\x51\x20' + addr_data)
+    else:
+        raise ValueError(f"Unsupported address type: {addr_type}")
+
+    return wif, addr, pubkey_compressed.hex()
+
+# Helper Functions
+def generate_brain_wallet(passphrase: str) -> tuple[str, str, str]:
+    private_key_bytes = hashlib.sha256(passphrase.encode('utf-8')).digest()
+    private_key = ec.derive_private_key(int.from_bytes(private_key_bytes, 'big'), ec.SECP256K1())
+    return _generate_address(private_key, "P2PKH")
 
 async def _generate_bip32_addresses(request: AddressRequest) -> dict:
     try:
-        if not Bip39MnemonicValidator().IsValid(request.mnemonic):
-            raise ValueError("Invalid mnemonic phrase.")
         if request.num_addresses < 1 or request.num_addresses > MAX_ADDRESSES:
             raise ValueError(f"Number of addresses must be between 1 and {MAX_ADDRESSES}")
 
-        seed_bytes = Bip39SeedGenerator(request.mnemonic).Generate(passphrase=request.passphrase)
-        root_key = BIP32Key.fromEntropy(seed_bytes)
+        mnemo = Mnemonic("english")
+        if not mnemo.check(request.mnemonic):
+            raise ValueError("Invalid mnemonic phrase.")
+        seed = mnemo.to_seed(request.mnemonic, passphrase=request.passphrase)
 
         parts = request.derivation_path.split('/')
         if parts[-1] != '{index}':
             raise ValueError("Derivation path must end with '/{index}'")
-        base_parts = parts[:-1]  # e.g., ['m', '0\'', '0']
-        account_parts = parts[:-2]  # e.g., ['m', '0\'']
-        base_path = '/'.join(base_parts)
-        account_path = '/'.join(account_parts) if len(account_parts) > 1 else "m"
+        account_parts = parts[:-2] if len(parts) > 2 else parts[:-1]
+        account_path = '/'.join(['m'] + account_parts)
+        account_key, account_chain_code = _bip32_derive(seed, account_path)
+        account_xpub = _bip32_xpub(account_key, account_chain_code)
 
-        # Derive account_xpub (one level above base_key)
-        account_key = root_key
-        for part in account_parts[1:]:
-            if "'" in part:
-                index = int(part[:-1]) + BIP32_HARDEN
-            else:
-                index = int(part)
-            account_key = account_key.ChildKey(index)
-        account_xpub = account_key.ExtendedKey(private=False)
-
-        # Derive bip32_xpub (base_key level)
-        base_key = root_key
-        for part in base_parts[1:]:
-            if "'" in part:
-                index = int(part[:-1]) + BIP32_HARDEN
-            else:
-                index = int(part)
-            base_key = base_key.ChildKey(index)
-        bip32_xpub = base_key.ExtendedKey(private=False)
+        base_path = '/'.join(parts[:-1])
+        base_key, base_chain_code = _bip32_derive(seed, base_path)
+        bip32_xpub = _bip32_xpub(base_key, base_chain_code)
 
         addresses = []
         for i in range(request.num_addresses):
             derivation_path = request.derivation_path.replace("{index}", str(i))
-            path_parts = derivation_path.split("/")
-            key = root_key
-            for part in path_parts[1:]:
-                if "'" in part:
-                    key = key.ChildKey(int(part[:-1]) + BIP32_HARDEN)
-                else:
-                    key = key.ChildKey(int(part))
-            address = key.Address()
-            public_key = key.PublicKey().hex()
-            if request.include_private_keys:
-                private_key = key.PrivateKey().hex()
-                wif = key.WalletImportFormat()
-            else:
-                private_key = None
-                wif = None
+            private_key, _ = _bip32_derive(seed, derivation_path)
+            wif, address, public_key = _generate_address(private_key, "P2PKH")
             addresses.append({
                 "derivation_path": derivation_path,
                 "address": address,
                 "public_key": public_key,
-                "private_key": private_key,
-                "wif": wif
+                "private_key": private_key.private_numbers().private_value.to_bytes(32, 'big').hex() if request.include_private_keys else None,
+                "wif": wif if request.include_private_keys else None
             })
 
         return {
@@ -257,40 +321,37 @@ async def _generate_bip32_addresses(request: AddressRequest) -> dict:
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-async def _generate_bip_addresses(request: AddressRequest, bip_class, coin_type, purpose: int) -> dict:
+async def _generate_bip_addresses(request: AddressRequest, purpose: int, addr_type: str) -> dict:
     try:
-        if not Bip39MnemonicValidator().IsValid(request.mnemonic):
-            raise ValueError("Invalid mnemonic phrase.")
         if request.num_addresses < 1 or request.num_addresses > MAX_ADDRESSES:
             raise ValueError(f"Number of addresses must be between 1 and {MAX_ADDRESSES}")
-        
-        seed_bytes = Bip39SeedGenerator(request.mnemonic).Generate(passphrase=request.passphrase)
-        bip_ctx = bip_class.FromSeed(seed_bytes, coin_type).Purpose().Coin().Account(0)
-        change_ctx = bip_ctx.Change(Bip44Changes.CHAIN_EXT)
-        
-        # Compute account_xpub at the account level (e.g., m/44'/0'/0')
-        account_xpub = bip_ctx.PublicKey().ToExtended()
-        # Compute bip32_xpub at the change level (e.g., m/44'/0'/0'/0)
-        bip32_xpub = change_ctx.PublicKey().ToExtended()
-        
+
+        mnemo = Mnemonic("english")
+        if not mnemo.check(request.mnemonic):
+            raise ValueError("Invalid mnemonic phrase.")
+        seed = mnemo.to_seed(request.mnemonic, passphrase=request.passphrase)
+
+        account_path = f"m/{purpose}'/0'/0'"
+        account_key, account_chain_code = _bip32_derive(seed, account_path)
+        account_xpub = _bip32_xpub(account_key, account_chain_code)
+
+        base_path = f"m/{purpose}'/0'/0'/0"
+        base_key, base_chain_code = _bip32_derive(seed, base_path)
+        bip32_xpub = _bip32_xpub(base_key, base_chain_code)
+
         addresses = []
         for i in range(request.num_addresses):
-            addr_ctx = change_ctx.AddressIndex(i)
-            public_key_bytes = addr_ctx.PublicKey().RawCompressed().ToBytes()
             derivation_path = f"m/{purpose}'/0'/0'/0/{i}"
-            if request.include_private_keys:
-                private_key = addr_ctx.PrivateKey().Raw().ToHex()
-                wif = addr_ctx.PrivateKey().ToWif()
-            else:
-                private_key = None
-                wif = None
+            private_key, _ = _bip32_derive(seed, derivation_path)
+            wif, address, public_key = _generate_address(private_key, addr_type)
             addresses.append({
                 "derivation_path": derivation_path,
-                "address": str(addr_ctx.PublicKey().ToAddress()),
-                "public_key": public_key_bytes.hex(),
-                "private_key": private_key,
-                "wif": wif
+                "address": address,
+                "public_key": public_key,
+                "private_key": private_key.private_numbers().private_value.to_bytes(32, 'big').hex() if request.include_private_keys else None,
+                "wif": wif if request.include_private_keys else None
             })
+
         return {
             "account_xpub": account_xpub,
             "bip32_xpub": bip32_xpub,
@@ -318,7 +379,8 @@ async def generate_mnemonic():
     mnemo = Mnemonic("english")
     words = mnemo.generate(128)
     seed = mnemo.to_seed(words)
-    bip32_root_key = BIP32Key.fromEntropy(seed).ExtendedKey()
+    private_key, chain_code = _bip32_derive(seed, "m")
+    bip32_root_key = _bip32_xpub(private_key, chain_code)
     return {
         "BIP39Mnemonic": words,
         "BIP39Seed": seed.hex(),
@@ -362,7 +424,7 @@ async def generate_bip32_addresses(request: AddressRequest = Body(
     return Bip32AddressListResponse(
         account_xpub=result["account_xpub"],
         bip32_xpub=result["bip32_xpub"],
-        addresses=[Bip32AddressDetails(**addr) for addr in result["addresses"]]
+        addresses=[AddressDetails(**addr) for addr in result["addresses"]]
     )
 
 @app.post(
@@ -382,11 +444,11 @@ async def generate_bip44_addresses(
         }
     )
 ):
-    result = await _generate_bip_addresses(request, Bip44, Bip44Coins.BITCOIN, 44)
+    result = await _generate_bip_addresses(request, 44, "P2PKH")
     return Bip32AddressListResponse(
         account_xpub=result["account_xpub"],
         bip32_xpub=result["bip32_xpub"],
-        addresses=[Bip32AddressDetails(**addr) for addr in result["addresses"]]
+        addresses=[AddressDetails(**addr) for addr in result["addresses"]]
     )
 
 @app.post(
@@ -406,11 +468,11 @@ async def generate_bip49_addresses(
         }
     )
 ):
-    result = await _generate_bip_addresses(request, Bip49, Bip49Coins.BITCOIN, 49)
+    result = await _generate_bip_addresses(request, 49, "P2SH-P2WPKH")
     return Bip32AddressListResponse(
         account_xpub=result["account_xpub"],
         bip32_xpub=result["bip32_xpub"],
-        addresses=[Bip32AddressDetails(**addr) for addr in result["addresses"]]
+        addresses=[AddressDetails(**addr) for addr in result["addresses"]]
     )
 
 @app.post(
@@ -430,11 +492,11 @@ async def generate_bip84_addresses(
         }
     )
 ):
-    result = await _generate_bip_addresses(request, Bip84, Bip84Coins.BITCOIN, 84)
+    result = await _generate_bip_addresses(request, 84, "P2WPKH")
     return Bip32AddressListResponse(
         account_xpub=result["account_xpub"],
         bip32_xpub=result["bip32_xpub"],
-        addresses=[Bip32AddressDetails(**addr) for addr in result["addresses"]]
+        addresses=[AddressDetails(**addr) for addr in result["addresses"]]
     )
 
 @app.post(
@@ -454,11 +516,11 @@ async def generate_bip86_addresses(
         }
     )
 ):
-    result = await _generate_bip_addresses(request, Bip86, Bip86Coins.BITCOIN, 86)
+    result = await _generate_bip_addresses(request, 86, "P2TR")
     return Bip32AddressListResponse(
         account_xpub=result["account_xpub"],
         bip32_xpub=result["bip32_xpub"],
-        addresses=[Bip32AddressDetails(**addr) for addr in result["addresses"]]
+        addresses=[AddressDetails(**addr) for addr in result["addresses"]]
     )
 
 if __name__ == "__main__":
