@@ -113,6 +113,7 @@ toml
 tornado
 traitlets
 typer
+typing-inspection
 typing_extensions
 urllib3
 uvicorn

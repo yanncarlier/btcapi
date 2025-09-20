@@ -492,7 +492,9 @@ typing-extensions==4.15.0
     #   typer
     #   typing-inspection
 typing-inspection==0.4.1
-    # via pydantic
+    # via
+    #   -r requirements.in
+    #   pydantic
 urllib3==2.5.0
     # via
     #   -r requirements.in
