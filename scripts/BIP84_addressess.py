@@ -12,7 +12,7 @@ from bip_utils import (
 from bip_utils.utils.mnemonic import MnemonicChecksumError
 
 # Example BIP39 mnemonic seed phrase
-mnemonic = "caution blush hill vintage park empower coin mystery earth unaware control fault"
+mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
 passphrase = ""  # Optional passphrase (default is empty string; can be changed by user)
 
 try:
@@ -33,6 +33,10 @@ try:
     bip84_mst_ctx = Bip84.FromSeed(seed_bytes, Bip84Coins.BITCOIN)
     bip84_acc_ctx = bip84_mst_ctx.Purpose().Coin().Account(0)
 
+    # Print the Account Extended Public Key
+    account_xpub = bip84_acc_ctx.PublicKey().ToExtended()
+    print("Account Extended Public Key:", account_xpub)
+    
     # Generate a set number of BIP84 addresses
     num_addresses = 1
     print("Generating BIP84 (Native SegWit P2WPKH) Addresses:")
@@ -44,9 +48,16 @@ try:
 
         # Construct derivation path manually (BIP84: m/84'/0'/0'/0/i)
         derivation_path = f"m/84'/0'/0'/0/{i}"
+
+        # Print the BIP32 Extended Public Key (xpub) when i == 0
+        # if i == 0:
+        #     bip32_xpub = bip84_chg_ctx.PublicKey().ToExtended()
+        #     print("BIP32 Extended Public Key (xpub):", bip32_xpub)
+
         address = bip84_addr_ctx.PublicKey().ToAddress()  # Native SegWit address (P2WPKH)
-        public_key = bip84_addr_ctx.PublicKey().RawCompressed().ToHex()  # Compressed public key in hex
-        private_key = bip84_addr_ctx.PrivateKey().ToWif()  # Private key in WIF format
+        public_key = bip84_addr_ctx.PublicKey().RawCompressed().ToHex()
+        private_key = bip84_addr_ctx.PrivateKey().Raw().ToHex()  # Private key in hex
+        wif = bip84_addr_ctx.PrivateKey().ToWif()  # Private key in WIF format
 
         # Output in specified order
         print("{")
@@ -54,6 +65,7 @@ try:
         print(f"address: {address}")
         print(f"public_key: {public_key}")
         print(f"private_key: {private_key}")
+        print(f"wif: {wif}")
         print("},")
 
 except MnemonicChecksumError as e:

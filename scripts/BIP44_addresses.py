@@ -6,7 +6,7 @@ from bip_utils import Bip39SeedGenerator, Bip44, Bip44Coins, Bip44Changes, Bip39
 from bip_utils.utils.mnemonic import MnemonicChecksumError
 
 # Example BIP39 mnemonic seed phrase
-mnemonic = "caution blush hill vintage park empower coin mystery earth unaware control fault"
+mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
 passphrase = ""  # Optional passphrase (default is empty string; can be changed by user)
 
 try:
@@ -30,7 +30,12 @@ try:
     print("Generating Native SegWit (P2WPKH) Addresses:")
 
     bip44_mst_ctx = Bip44.FromSeed(seed_bytes, Bip44Coins.BITCOIN)
+
     bip44_acc_ctx = bip44_mst_ctx.Purpose().Coin().Account(0)
+
+    # Print the Account Extended Public Key (xpub)
+    account_xpub = bip44_acc_ctx.PublicKey().ToExtended()
+    print("Account Extended Public Key (xpub):", account_xpub)
 
     # Generate a set number of addresses
     num_addresses = 1  # Number of addresses to generate
@@ -42,10 +47,16 @@ try:
         # Construct the derivation path manually (m/44'/0'/0'/0/i)
         derivation_path = f"m/44'/0'/0'/0/{i}"
 
+        # Print the BIP32 Extended Public Key (xpub) when i == 0
+        # if i == 0:
+        #     bip32_xpub = bip44_chg_ctx.PublicKey().ToExtended()
+        #     print("BIP32 Extended Public Key (xpub):", bip32_xpub)
+
         # Extract required information
         address = bip44_addr_ctx.PublicKey().ToAddress()  # Bitcoin address
         public_key = bip44_addr_ctx.PublicKey().RawCompressed().ToHex()  # Public key in hex
-        private_key = bip44_addr_ctx.PrivateKey().ToWif()  # Private key in WIF format
+        private_key = bip44_addr_ctx.PrivateKey().Raw().ToHex()
+        wif = bip44_addr_ctx.PrivateKey().ToWif()  # Private key in WIF format
 
         # Print the output in the specified order
         print("{")
@@ -53,6 +64,7 @@ try:
         print(f"address: {address}")
         print(f"public_key: {public_key}")
         print(f"private_key: {private_key}")
+        print(f"wif: {wif}")
         print("},")
 
 except MnemonicChecksumError as e:

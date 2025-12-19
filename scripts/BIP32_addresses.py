@@ -6,7 +6,7 @@ from mnemonic import Mnemonic
 from bip32utils import BIP32Key, BIP32_HARDEN
 
 # Example BIP39 mnemonic seed phrase
-mnemonic = "caution blush hill vintage park empower coin mystery earth unaware control fault"
+mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
 passphrase = ""  # Optional passphrase (default is empty string; can be changed by user)
 
 try:
@@ -30,23 +30,37 @@ try:
     # Generate BIP32 root key from the seed
     root_key = BIP32Key.fromEntropy(seed)
 
+    # Print the BIP32 Root Key
+    # account_xpub = root_key.ExtendedKey()  
+    # print("BIP32 Root Key:", account_xpub)
+
+
+
     # Generate a set number of addresses
     num_addresses = 1
     for i in range(num_addresses):
         # Derive Bitcoin address using BIP44 path: m/44'/0'/0'/0/i
         # Note: Original script used m/32', but BIP44 for Bitcoin uses 44'. Adjusted accordingly.
         address_key = (root_key
-                       .ChildKey(32 + BIP32_HARDEN)  # Purpose (BIP44)
-                       .ChildKey(0 + BIP32_HARDEN)   # Coin type (Bitcoin)
-                       .ChildKey(0 + BIP32_HARDEN)   # Account 0
-                       .ChildKey(0)                  # External chain
+                       .ChildKey(0 + BIP32_HARDEN)  # Purpose (BIP44)
+                       .ChildKey(0)
                        .ChildKey(i))                 # Address index
 
+        if i == 0:
+            # Print the BIP32 Extended Private Key
+            # account_xpub = address_key.ExtendedKey()
+            # print("BIP32 Extended Private Key:", account_xpub)
+
+            # Print the BIP32 Extended Public Key (xpub)
+            account_xpub = address_key.ExtendedKey(private=False)  # Set private=False to get xpub
+            print("BIP32 Extended Public Key (xpub):", account_xpub)
+
         # Extract required information
-        derivation_path = f"m/32'/0'/0'/0/{i}"
+        derivation_path = f"m/0'/0/{i}"
         address = address_key.Address()
         public_key = address_key.PublicKey().hex()
-        private_key = address_key.WalletImportFormat()
+        private_key = address_key.PrivateKey().hex()
+        wif = address_key.WalletImportFormat()
 
         # Print the output in the specified order
         print("{")
@@ -54,6 +68,7 @@ try:
         print(f"address: {address}")
         print(f"public_key: {public_key}")
         print(f"private_key: {private_key}")
+        print(f"wif: {wif}")
         print("},")
 
 except ValueError as e:

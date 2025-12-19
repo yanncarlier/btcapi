@@ -15,7 +15,7 @@ from bip_utils import (
 from bip_utils.utils.mnemonic import MnemonicChecksumError
 
 # Example BIP39 mnemonic seed phrase
-mnemonic = "caution blush hill vintage park empower coin mystery earth unaware control fault"
+mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
 passphrase = ""  # Optional passphrase (default is empty string; can be changed by user)
 
 try:
@@ -49,14 +49,14 @@ try:
     #     derivation_path = f"m/44'/0'/0'/0/{i}"
     #     address = bip44_addr_ctx.PublicKey().ToAddress()
     #     public_key = bip44_addr_ctx.PublicKey().RawCompressed().ToHex()
-    #     private_key = bip44_addr_ctx.PrivateKey().ToWif()
+    #     wif = bip44_addr_ctx.PrivateKey().ToWif()
 
     #     # Output in specified order
     #     print("++++++++++++++++++++++++++++++++++++++++++++")
     #     print(f"derivation_path: {derivation_path}")
     #     print(f"address: {address}")
     #     print(f"public_key: {public_key}")
-    #     print(f"private_key: {private_key}")
+    #     print(f"wif: {wif}")
 
     # print("\n")
 
@@ -65,15 +65,27 @@ try:
     bip49_mst_ctx = Bip49.FromSeed(seed_bytes, Bip49Coins.BITCOIN)
     bip49_acc_ctx = bip49_mst_ctx.Purpose().Coin().Account(0)
 
+    # Print the Account Extended Public Key
+    account_xpub = bip49_acc_ctx.PublicKey().ToExtended()
+    print("Account Extended Public Key:", account_xpub)
+
+
     for i in range(num_addresses):
         bip49_chg_ctx = bip49_acc_ctx.Change(Bip44Changes.CHAIN_EXT)
         bip49_addr_ctx = bip49_chg_ctx.AddressIndex(i)
 
         # Construct derivation path manually (BIP49: m/49'/0'/0'/0/i)
         derivation_path = f"m/49'/0'/0'/0/{i}"
+
+        # Print the BIP32 Extended Public Key (xpub) when i == 0
+        # if i == 0:
+        #     bip32_xpub = bip49_chg_ctx.PublicKey().ToExtended()
+        #     print("BIP32 Extended Public Key (xpub):", bip32_xpub)
+
         address = bip49_addr_ctx.PublicKey().ToAddress()
         public_key = bip49_addr_ctx.PublicKey().RawCompressed().ToHex()
-        private_key = bip49_addr_ctx.PrivateKey().ToWif()
+        private_key = bip49_addr_ctx.PrivateKey().Raw().ToHex()
+        wif = bip49_addr_ctx.PrivateKey().ToWif()
 
         # Output in specified order
         print("{")
@@ -81,6 +93,7 @@ try:
         print(f"address: {address}")
         print(f"public_key: {public_key}")
         print(f"private_key: {private_key}")
+        print(f"wif: {wif}")
         print("},")
 
 except MnemonicChecksumError as e:
