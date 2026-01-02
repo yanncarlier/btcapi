@@ -401,6 +401,8 @@ FodyWeavers.xsd
 
 # Project-specific ignores
 notes.md.txt
+notes.md
+notes.txt
 .venv/
 zuplo_routes.oas.json
 
