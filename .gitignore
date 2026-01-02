@@ -401,10 +401,36 @@ FodyWeavers.xsd
 
 # Project-specific ignores
 notes.md.txt
-notes.md
-notes.txt
 .venv/
 zuplo_routes.oas.json
 
-# Additional Python ignores
-*.txt
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+*.env
+
+# Logs and databases
+*.log
+*.sqlite
+*.db
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE and editor files
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
