@@ -434,3 +434,7 @@ Thumbs.db
 *.tmp
 *.temp
 .cache/
+
+# Generated requirements files (except .in files)
+requirements.txt
+**/requirements.txt
