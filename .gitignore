@@ -398,7 +398,11 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
-notes.md
+
+# Project-specific ignores
+notes.md.txt
 .venv/
 zuplo_routes.oas.json
+
+# Additional Python ignores
 *.txt
