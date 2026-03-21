@@ -1,5 +1,7 @@
 # Bitcoin Address Generation API
 
+**Disclaimer: Use at Your Own Risk** This is experimental beta software and may contain bugs or exhibit unexpected behavior. It is provided "as-is" without any warranties. Use of this software is entirely at your own discretion and risk.
+
 A FastAPI-based RESTful API for generating Bitcoin mnemonic seeds and various address types including BIP32, BIP44, BIP49, BIP84, and BIP86.
 
 ## Features
