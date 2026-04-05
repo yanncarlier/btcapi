@@ -27,8 +27,8 @@ A FastAPI-based RESTful API for generating Bitcoin mnemonic seeds and various ad
 
 1. Clone the repository:
 ```bash
-git clone <repository-url>
-cd bitcoin-address-api
+git clone git@github.com:yanncarlier/btcapi.git
+cd btcapi
 ```
 
 1. Create a virtual environment:
@@ -37,7 +37,7 @@ bash
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate  # On Windows: venv\Scripts\activate
+source .venv/bin/activate  
 ```
 
 1. Install dependencies:
@@ -55,9 +55,9 @@ Usage
 bash
 
 ```bash
-python main.py
+python api/main.py
 # or
-uvicorn main:app --host 0.0.0.0 --port 8000
+uvicorn api/main:app --host 0.0.0.0 --port 8000
 ```
 
 1. Access the API:
