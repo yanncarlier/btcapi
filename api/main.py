@@ -20,6 +20,7 @@ MAX_ADDRESSES = 10
 RATE_LIMIT = 60
 TIME_FRAME = timedelta(hours=1)
 BIP32_HARDEN = 0x80000000  # Hardened index offset
+SECP256K1_ORDER = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
 
 # In-memory storage for rate limiting
 request_timestamps = {}
@@ -186,7 +187,7 @@ def _bip32_derive(seed: bytes, path: str) -> tuple[ec.EllipticCurvePrivateKey, b
         hmac_obj = hmac.new(c, data, hashlib.sha512)
         hmac_data = hmac_obj.digest()
         Il, Ir = hmac_data[:32], hmac_data[32:]
-        child_k = (int.from_bytes(Il, 'big') + int.from_bytes(k, 'big')) % ec.SECP256K1().key_size
+        child_k = (int.from_bytes(Il, 'big') + int.from_bytes(k, 'big')) % SECP256K1_ORDER
         if child_k == 0:
             raise ValueError("Invalid child key (zero)")
         return child_k.to_bytes(32, 'big'), Ir
