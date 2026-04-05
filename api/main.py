@@ -275,7 +275,13 @@ def _generate_address(private_key: ec.EllipticCurvePrivateKey, addr_type: str) -
 
 # Helper Functions
 def generate_brain_wallet(passphrase: str) -> tuple[str, str, str]:
-    private_key_bytes = hashlib.sha256(passphrase.encode('utf-8')).digest()
+    private_key_bytes = hashlib.pbkdf2_hmac(
+        'sha256',
+        passphrase.encode('utf-8'),
+        b'brain-wallet',
+        200_000,
+        dklen=32,
+    )
     private_key = ec.derive_private_key(int.from_bytes(private_key_bytes, 'big'), ec.SECP256K1())
     return _generate_address(private_key, "P2PKH")
 
